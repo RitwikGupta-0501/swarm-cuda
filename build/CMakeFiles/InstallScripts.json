@@ -1,9 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/ritwik/Repo/swarm-cuda/build/cmake_install.cmake",
-		"/home/ritwik/Repo/swarm-cuda/build/external/glfw/cmake_install.cmake",
-		"/home/ritwik/Repo/swarm-cuda/build/external/glfw/src/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

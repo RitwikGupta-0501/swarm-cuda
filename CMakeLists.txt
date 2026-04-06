@@ -3,7 +3,7 @@ project(SwarmSim LANGUAGES C CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_CUDA_ARCHITECTURES 50 86 89) # Adjust for your GPU
+set(CMAKE_CUDA_ARCHITECTURES 86 89) # Adjust for your GPU
 
 # Find OpenGL
 find_package(OpenGL REQUIRED)
@@ -40,6 +40,9 @@ target_include_directories(imgui PUBLIC
 # Main executable
 add_executable(swarm-sim
     src/main.cpp
+    src/simulation.cu
+    src/kernels.cu
+    src/cuda_utils.cu
 )
 
 target_link_libraries(swarm-sim
@@ -50,6 +53,10 @@ target_link_libraries(swarm-sim
 )
 
 target_include_directories(swarm-sim PRIVATE
+    src
     external/glad/include
     external/glfw/include
+    external/imgui
+    external/imgui/backends
+    external/glm
 )
