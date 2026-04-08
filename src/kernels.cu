@@ -1,9 +1,14 @@
 #include "kernels.h"
 #include "agent.h"
 #include <math.h>
+#include "neighbor_query.cuh"
 
 // GPU kernel: one thread per agent
-__global__ void boidsKernel(Agent* agents, int count, float dt, float mouseX, float mouseY) {
+__global__ void boidsKernel(
+    Agent* agents, int count, float dt, float mouseX, float mouseY,
+    int* cellStart, int* cellEnd, int* particleIndex,
+    int tableSize, float cellSize
+) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= count) return;
 
@@ -16,31 +21,21 @@ __global__ void boidsKernel(Agent* agents, int count, float dt, float mouseX, fl
     int neighbours = 0;
 
     // neighbor loop
-    for (int j = 0; j < count; j++) {
-        if (i == j) continue;
-
-        float dx = agents[j].x - self.x;
-        float dy = agents[j].y - self.y;
-
-        float dist = sqrtf(dx * dx + dy * dy);
-
-        // alignment + cohesion
-        if (dist < self.perception_radius && dist > 0.0f) {
-            aliX += agents[j].vx;
-            aliY += agents[j].vy;
-
-            cohX += agents[j].x;
-            cohY += agents[j].y;
-
-            neighbours++;
-        }
-
-        // separation
-        if (dist < 0.02f && dist > 0.0f) {
-            sepX -= dx / dist;
-            sepY -= dy / dist;
-        }
-    }
+    queryNeighbors(
+        i,                           // agent_idx
+        self.x, self.y,              // px, py
+        cellSize,                    // cell_size
+        agents,                      // agents buffer
+        particleIndex,               // sorted_agents
+        cellStart,                   // cell_start
+        cellEnd,                     // cell_end
+        tableSize,      // table_size (total number of cells)
+        self.perception_radius,      // radius
+        &sepX, &sepY,                // pointers to Separation accumulators
+        &aliX, &aliY,                // pointers to Alignment accumulators
+        &cohX, &cohY,                // pointers to Cohesion accumulators
+        &neighbours                  // pointer to neighbor count
+    );
 
     // averages
     if (neighbours > 0) {
@@ -116,4 +111,17 @@ void launchBoidsKernel(Agent* d_agents, int count, float dt, float mouseX, float
     int gridSize = (count + blockSize - 1) / blockSize;
 
     boidsKernel<<<gridSize, blockSize>>>(d_agents, count, dt, mouseX, mouseY);
+}void launchBoidsKernel(
+    Agent* d_agents, int count, float dt, float mouseX, float mouseY,
+    int* cellStart, int* cellEnd, int* particleIndex,
+    int tableSize, float cellSize // <-- Replaced gridWidth/Height with tableSize
+) {
+    int blockSize = 256;
+    int gridSize = (count + blockSize - 1) / blockSize;
+
+    boidsKernel<<<gridSize, blockSize>>>(
+        d_agents, count, dt, mouseX, mouseY,
+        cellStart, cellEnd, particleIndex,
+        tableSize, cellSize
+    );
 }
