@@ -4,11 +4,13 @@
 #include "spatial_hash.h"
 
 #include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
 #include <cstdlib>
 
 static Agent* d_agents = nullptr;
 static Agent* h_agents = nullptr;
 static int agentCountGlobal = 0;
+static cudaGraphicsResource* renderResource = nullptr;
 
 static SpatialHash sh;
 
@@ -47,6 +49,19 @@ void initSimulation(int agentCount) {
 
 // 🔁 STEP
 void stepSimulation(float dt, float mouseX, float mouseY) {
+    float2* d_positions = nullptr;
+
+    if (renderResource != nullptr) {
+        cudaGraphicsMapResources(1, &renderResource, 0);
+
+        size_t mappedSize = 0;
+        cudaGraphicsResourceGetMappedPointer(
+            reinterpret_cast<void**>(&d_positions),
+            &mappedSize,
+            renderResource
+        );
+    }
+
     buildSpatialHash(sh, d_agents, agentCountGlobal, 0.2f);
 
     launchBoidsKernel(
@@ -59,15 +74,41 @@ void stepSimulation(float dt, float mouseX, float mouseY) {
             sh.cell_end,
             sh.sorted_agents,
             sh.table_size,
-            sh.cell_size
+            sh.cell_size,
+            d_positions
         );
 
     cudaDeviceSynchronize();
-    cudaMemcpy(h_agents, d_agents, agentCountGlobal * sizeof(Agent), cudaMemcpyDeviceToHost);
+
+    if (renderResource != nullptr) {
+        cudaGraphicsUnmapResources(1, &renderResource, 0);
+    } else {
+        cudaMemcpy(h_agents, d_agents, agentCountGlobal * sizeof(Agent), cudaMemcpyDeviceToHost);
+    }
+}
+
+void registerRenderBuffer(GLuint vbo) {
+    if (renderResource != nullptr) {
+        unregisterRenderBuffer();
+    }
+
+    cudaGraphicsGLRegisterBuffer(
+        &renderResource,
+        vbo,
+        cudaGraphicsRegisterFlagsWriteDiscard
+    );
+}
+
+void unregisterRenderBuffer() {
+    if (renderResource != nullptr) {
+        cudaGraphicsUnregisterResource(renderResource);
+        renderResource = nullptr;
+    }
 }
 
 // 🧹 CLEANUP
 void shutdownSimulation() {
+    unregisterRenderBuffer();
     cudaFree(d_agents);
     delete[] h_agents;
     destroySpatialHash(sh);

@@ -7,7 +7,8 @@
 __global__ void boidsKernel(
     Agent* agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
-    int tableSize, float cellSize
+    int tableSize, float cellSize,
+    float2* renderPositions
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= count) return;
@@ -103,13 +104,18 @@ __global__ void boidsKernel(
     self.y += self.vy * dt;
 
     agents[i] = self;
+
+    if (renderPositions != nullptr) {
+        renderPositions[i] = make_float2(self.x, self.y);
+    }
 }
 
 // kernel launcher
 void launchBoidsKernel(
     Agent* d_agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
-    int tableSize, float cellSize // <-- Replaced gridWidth/Height with tableSize
+    int tableSize, float cellSize,
+    float2* renderPositions
 ) {
     int blockSize = 256;
     int gridSize = (count + blockSize - 1) / blockSize;
@@ -117,6 +123,7 @@ void launchBoidsKernel(
     boidsKernel<<<gridSize, blockSize>>>(
         d_agents, count, dt, mouseX, mouseY,
         cellStart, cellEnd, particleIndex,
-        tableSize, cellSize
+        tableSize, cellSize,
+        renderPositions
     );
 }

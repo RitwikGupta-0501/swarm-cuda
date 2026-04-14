@@ -71,12 +71,23 @@ int main() {
 
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, 1000 * 2 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, agentCount * 2 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
     initSimulation(agentCount);
+    registerRenderBuffer(VBO);
+
+    GLuint mouseVAO, mouseVBO;
+    glGenVertexArrays(1, &mouseVAO);
+    glGenBuffers(1, &mouseVBO);
+
+    glBindVertexArray(mouseVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, mouseVBO);
+    glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
 
     // 🔥 FULLSCREEN TOGGLE VARIABLES
     bool isFullscreen = false;
@@ -130,12 +141,7 @@ int main() {
         // 🔥 SIMULATION
         stepSimulation(dt, mouseX, mouseY);
 
-        float* positions = getAgentPositions();
         int count = getAgentCount();
-
-        // 🔄 UPDATE BUFFER
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, count * 2 * sizeof(float), positions, GL_DYNAMIC_DRAW);
 
         // 🧼 CLEAR
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -152,11 +158,12 @@ int main() {
         // 🔴 DRAW MOUSE
         float mousePoint[2] = {mouseX, mouseY};
 
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBindBuffer(GL_ARRAY_BUFFER, mouseVBO);
         glBufferData(GL_ARRAY_BUFFER, sizeof(mousePoint), mousePoint, GL_DYNAMIC_DRAW);
 
         glUniform3f(colorLoc, 1.0f, 0.0f, 0.0f);
         glPointSize(12.0f);
+        glBindVertexArray(mouseVAO);
         glDrawArrays(GL_POINTS, 0, 1);
 
         glfwSwapBuffers(window);
@@ -164,6 +171,10 @@ int main() {
     }
 
     shutdownSimulation();
+    glDeleteBuffers(1, &mouseVBO);
+    glDeleteVertexArrays(1, &mouseVAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteVertexArrays(1, &VAO);
     glfwTerminate();
     return 0;
 }
