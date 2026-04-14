@@ -26,6 +26,7 @@ void main() {
 )";
 
 int main() {
+    int agentCount = 10000;
     glfwInit();
 
     // ✅ WINDOWED MODE (default)
@@ -37,6 +38,7 @@ int main() {
     );
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(0);  // Disable VSync
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cout << "Failed to init GLAD\n";
@@ -74,7 +76,7 @@ int main() {
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    initSimulation(1000);
+    initSimulation(agentCount);
 
     // 🔥 FULLSCREEN TOGGLE VARIABLES
     bool isFullscreen = false;

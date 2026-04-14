@@ -1,6 +1,7 @@
 #include "simulation.h"
 #include "kernels.h"
 #include "agent.h"
+#include "spatial_hash.h"
 
 #include <cuda_runtime.h>
 #include <cstdlib>
@@ -8,6 +9,8 @@
 static Agent* d_agents = nullptr;
 static Agent* h_agents = nullptr;
 static int agentCountGlobal = 0;
+
+static SpatialHash sh;
 
 // 🔥 INIT
 void initSimulation(int agentCount) {
@@ -38,15 +41,28 @@ void initSimulation(int agentCount) {
 
     cudaMalloc(&d_agents, agentCount * sizeof(Agent));
     cudaMemcpy(d_agents, h_agents, agentCount * sizeof(Agent), cudaMemcpyHostToDevice);
+
+    initSpatialHash(sh, agentCount);
 }
 
 // 🔁 STEP
 void stepSimulation(float dt, float mouseX, float mouseY) {
-    launchBoidsKernel(d_agents, agentCountGlobal, dt, mouseX, mouseY);
+    buildSpatialHash(sh, d_agents, agentCountGlobal, 0.2f);
+
+    launchBoidsKernel(
+            d_agents,
+            agentCountGlobal,
+            dt,
+            mouseX,
+            mouseY,
+            sh.cell_start,
+            sh.cell_end,
+            sh.sorted_agents,
+            sh.table_size,
+            sh.cell_size
+        );
 
     cudaDeviceSynchronize();
-
-    // copy back to CPU for rendering
     cudaMemcpy(h_agents, d_agents, agentCountGlobal * sizeof(Agent), cudaMemcpyDeviceToHost);
 }
 
@@ -54,6 +70,7 @@ void stepSimulation(float dt, float mouseX, float mouseY) {
 void shutdownSimulation() {
     cudaFree(d_agents);
     delete[] h_agents;
+    destroySpatialHash(sh);
 }
 
 // 🎨 GET POSITIONS FOR RENDERING

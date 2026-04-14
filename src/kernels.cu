@@ -106,12 +106,7 @@ __global__ void boidsKernel(
 }
 
 // kernel launcher
-void launchBoidsKernel(Agent* d_agents, int count, float dt, float mouseX, float mouseY) {
-    int blockSize = 256;
-    int gridSize = (count + blockSize - 1) / blockSize;
-
-    boidsKernel<<<gridSize, blockSize>>>(d_agents, count, dt, mouseX, mouseY);
-}void launchBoidsKernel(
+void launchBoidsKernel(
     Agent* d_agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
     int tableSize, float cellSize // <-- Replaced gridWidth/Height with tableSize
