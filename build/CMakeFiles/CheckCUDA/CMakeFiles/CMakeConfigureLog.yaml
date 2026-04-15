@@ -1,0 +1,78 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "D:/Software/share/cmake-4.3/Modules/CMakeDetermineSystem.cmake:212 (message)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      The system is: Windows - 10.0.26200 - AMD64
+  -
+    kind: "find-v1"
+    backtrace:
+      - "D:/Software/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:468 (find_file)"
+      - "D:/Software/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:506 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "D:/Software/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "D:/Software/share/cmake-4.3/Modules/CMakeDetermineCompilerId.cmake:53 (__determine_compiler_id_test)"
+      - "D:/Software/share/cmake-4.3/Modules/CMakeDetermineCUDACompiler.cmake:163 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:13 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "LAST"
+      SearchAppBundle: "LAST"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCUDACompilerId.cu.in"
+    candidate_directories:
+      - "D:/Software/share/cmake-4.3/Modules/"
+    found: "D:/Software/share/cmake-4.3/Modules/CMakeCUDACompilerId.cu.in"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "D:/vcpkg/installed/x64-windows/debug"
+        - "D:/vcpkg/installed/x64-windows"
+      ENV{PATH}:
+        - "C:\\Program Files\\Python314\\Scripts\\"
+        - "C:\\Program Files\\Python314\\"
+        - "C:\\Windows\\system32"
+        - "C:\\Windows"
+        - "C:\\Windows\\System32\\Wbem"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\Windows\\System32\\OpenSSH\\"
+        - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
+        - "C:\\Program Files\\Intel\\WiFi\\bin\\"
+        - "C:\\Program Files\\Common Files\\Intel\\WirelessCommon\\"
+        - "C:\\WINDOWS\\system32"
+        - "C:\\WINDOWS"
+        - "C:\\WINDOWS\\System32\\Wbem"
+        - "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\WINDOWS\\System32\\OpenSSH\\"
+        - "C:\\Program Files\\dotnet\\"
+        - "C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR"
+        - "C:\\MinGW\\bin"
+        - "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\"
+        - "C:\\WINDOWS\\system32"
+        - "C:\\WINDOWS"
+        - "C:\\WINDOWS\\System32\\Wbem"
+        - "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\WINDOWS\\System32\\OpenSSH\\"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\nodejs\\"
+        - "D:\\Software\\bin"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "d:\\Software\\cursor\\resources\\app\\codeBin"
+        - "C:\\Users\\WELCOME\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\WELCOME\\.dotnet\\tools"
+        - "C:\\Users\\WELCOME\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\WELCOME\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\Users\\WELCOME\\AppData\\Roaming\\npm"
+        - "D:\\Software\\cursor\\resources\\app\\bin"
+        - "D:\\Software\\antigravity\\Antigravity\\bin"
+      CMAKE_FIND_ROOT_PATH: "D:/vcpkg/installed/x64-windows/debug;D:/vcpkg/installed/x64-windows"
+...

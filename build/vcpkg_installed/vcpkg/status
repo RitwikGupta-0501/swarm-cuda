@@ -1,0 +1,67 @@
+Package: vcpkg-cmake-config
+Version: 2024-05-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: e3f915b1dcd5563b3e2786dfc612cf50d9627751f0ef85b1a31b7741b5dcda2f
+Status: install ok installed
+
+Package: vcpkg-cmake
+Version: 2024-04-23
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 485e0f9085d825b65f4126bf727dc02106be0f855ef1401be036ba5a95551b6d
+Status: install ok installed
+
+Package: egl-registry
+Version: 2025-05-27
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 8d9b0216b9989db23f0354975e917f44a6e75db1dd257b634251621c3322c1ef
+Description: EGL API and Extension Registry
+Status: install ok installed
+
+Package: opengl-registry
+Version: 2026-01-26
+Depends: egl-registry
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 2d00387453de6702e1354aac5d02a6b230efa6f7497b7776482a0d6a8e828423
+Description: OpenGL, OpenGL ES, and OpenGL ES-SC API and Extension Registry
+Status: install ok installed
+
+Package: glad
+Version: 0.1.36
+Depends: egl-registry, opengl-registry, vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 60e09d8e860acede392d902dcc994808bbee8aa47ee2a39cf13a6c71e741a918
+Description: Multi-Language Vulkan/GL/GLES/EGL/GLX/WGL Loader-Generator based on the official specs.
+Default-Features: loader
+Status: install ok installed
+
+Package: glad
+Feature: loader
+Architecture: x64-windows
+Multi-Arch: same
+Description: Generate loader logic.
+Status: install ok installed
+
+Package: glfw3
+Version: 3.4
+Port-Version: 1
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: c665f20352568c023723d02c9e1e880a665f98e2af3b56cfab8b4a085d2ae3cd
+Description: GLFW is a free, Open Source, multi-platform library for OpenGL, OpenGL ES and Vulkan application development. It provides a simple, platform-independent API for creating windows, contexts and surfaces, reading input, handling events, etc.
+Status: install ok installed
+
+Package: glm
+Version: 1.0.3
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-windows
+Multi-Arch: same
+Abi: 2133d68dbdb71ed2bb856ad28252e89b59df64025d3cfe8e7bf43be63dd64cf5
+Description: OpenGL Mathematics (GLM)
+Status: install ok installed
+

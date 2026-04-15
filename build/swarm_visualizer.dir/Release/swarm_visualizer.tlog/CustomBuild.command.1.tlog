@@ -1,0 +1,10 @@
+^D:\3RD YEAR\P&D COMPUTING\LAB\SWARM PROJECT - COPY\CMAKELISTS.TXT
+setlocal
+D:\Software\bin\cmake.exe "-SD:/3rd Year/P&D Computing/LAB/Swarm Project - Copy" "-BD:/3rd Year/P&D Computing/LAB/Swarm Project - Copy/build" --check-stamp-file "D:/3rd Year/P&D Computing/LAB/Swarm Project - Copy/build/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
