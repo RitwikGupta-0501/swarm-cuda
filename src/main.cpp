@@ -1,6 +1,5 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
 #include <iostream>
 
 #include "simulation.h"
@@ -27,6 +26,7 @@ void main() {
 
 int main() {
     int agentCount = 10000;
+
     glfwInit();
 
     // ✅ WINDOWED MODE (default)
