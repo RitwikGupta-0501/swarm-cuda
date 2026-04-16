@@ -25,7 +25,7 @@ void main() {
 )";
 
 int main() {
-    int agentCount = 10000;
+    int agentCount = 5000;
 
     glfwInit();
 

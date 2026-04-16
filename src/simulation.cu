@@ -49,7 +49,7 @@ void initSimulation(int agentCount) {
 
 // 🔁 STEP
 void stepSimulation(float dt, float mouseX, float mouseY) {
-    float2* d_positions = nullptr;
+    RenderAgent* d_positions = nullptr;
 
     if (renderResource != nullptr) {
         cudaGraphicsMapResources(1, &renderResource, 0);

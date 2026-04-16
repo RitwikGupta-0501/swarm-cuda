@@ -8,7 +8,7 @@ __global__ void boidsKernel(
     Agent* agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
     int tableSize, float cellSize,
-    float2* renderPositions
+    RenderAgent* renderPositions
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= count) return;
@@ -106,7 +106,10 @@ __global__ void boidsKernel(
     agents[i] = self;
 
     if (renderPositions != nullptr) {
-        renderPositions[i] = make_float2(self.x, self.y);
+        renderPositions[i].px = self.x;
+        renderPositions[i].py = self.y;
+        renderPositions[i].vx = self.vx;
+        renderPositions[i].vy = self.vy;
     }
 }
 
@@ -115,7 +118,7 @@ void launchBoidsKernel(
     Agent* d_agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
     int tableSize, float cellSize,
-    float2* renderPositions
+    RenderAgent* renderPositions
 ) {
     int blockSize = 256;
     int gridSize = (count + blockSize - 1) / blockSize;
