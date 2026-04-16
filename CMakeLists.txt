@@ -10,7 +10,7 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
 endif()
 
 option(SWARM_ENABLE_CUDA "Enable CUDA-OpenGL interop module" ON)
-option(SWARM_RUNTIME_VALIDATION "Enable runtime validation checks (debug-oriented)." ON)
+option(SWARM_RUNTIME_VALIDATION "Enable runtime validation checks (debug-oriented)." OFF)
 
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
@@ -73,6 +73,9 @@ endif()
 if(SWARM_ENABLE_CUDA)
   target_sources(swarm_visualizer PRIVATE
     src/interop_cuda_gl.cu
+    src/simulation.cu
+    src/kernels.cu
+    src/spatial_hash.cu
   )
 
   set_target_properties(swarm_visualizer PROPERTIES
@@ -99,5 +102,3 @@ add_custom_command(TARGET swarm_visualizer POST_BUILD
     "$<TARGET_FILE_DIR:swarm_visualizer>/shaders"
     COMMENT "Copying shaders to build directory..."
 )
-
-

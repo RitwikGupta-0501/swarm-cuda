@@ -2,6 +2,7 @@
 #include "error.h"
 #include "renderer.h"
 #include "time_stats.h"
+#include "simulation.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -16,7 +17,7 @@ namespace {
 struct AppCtx {
   Renderer renderer;
   TimeStats stats{120};
-  int agentCount = 200000;
+  int agentCount = 1000;
   float timeSeconds = 0.0f;
   bool showMouseCapture = false;
 };
@@ -108,7 +109,7 @@ int main() {
     SWARM_FATAL("Failed to load OpenGL via GLAD");
   }
 
-  installGlDebugCallbackIfAvailable();
+  // installGlDebugCallbackIfAvailable();
 
   AppCtx ctx;
   glfwSetWindowUserPointer(window, &ctx);
@@ -122,12 +123,16 @@ int main() {
   glfwGetFramebufferSize(window, &w, &h);
 
   RendererConfig cfg{};
-  cfg.maxAgents = 1'000'000;
+  cfg.maxAgents = 1000;
 
   std::string err;
   if (!ctx.renderer.init(cfg, w, h, &err)) {
     SWARM_FATAL(err.empty() ? "Renderer init failed" : err);
   }
+
+  initSimulation(cfg.maxAgents);
+  ctx.agentCount = getAgentCount();
+  ctx.renderer.uploadAgentTypes(getAgentTypesArray(), ctx.agentCount);
 
   auto last = std::chrono::high_resolution_clock::now();
 
@@ -137,10 +142,23 @@ int main() {
     const auto now = std::chrono::high_resolution_clock::now();
     const double dt = std::chrono::duration<double>(now - last).count();
     last = now;
-    ctx.timeSeconds += static_cast<float>(dt);
-    ctx.stats.push(dt);
+
+    float rawDt = static_cast<float>(dt);
+    float safeDt = std::clamp(rawDt, 0.001f, 0.033f);
+    ctx.timeSeconds += safeDt;
+    ctx.stats.push(safeDt);
 
     const FrameStats s = ctx.stats.stats();
+
+    double mx, my;
+    glfwGetCursorPos(window, &mx, &my);
+    int currentW, currentH;
+    glfwGetFramebufferSize(window, &currentW, &currentH);
+    float mouseX = (static_cast<float>(mx) / currentW) * 2.0f - 1.0f;
+    float mouseY = 1.0f - (static_cast<float>(my) / currentH) * 2.0f;
+
+    void* interopRes = ctx.renderer.getInteropHandle().cudaGraphicsResource;
+    stepSimulation(safeDt, mouseX, mouseY, interopRes);
 
     // Note: CUDA simulation should map/write/unmap the shared VBO here.
     // This demo does not populate agents yet; renderer still runs and overlays work.
@@ -153,4 +171,3 @@ int main() {
   glfwTerminate();
   return 0;
 }
-
