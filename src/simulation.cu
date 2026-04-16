@@ -66,6 +66,8 @@ void stepSimulation(float dt, float mouseX, float mouseY, void* visualizerResour
 
     buildSpatialHash(sh, d_agents, agentCountGlobal, 0.2f);
 
+    cudaDeviceSynchronize();
+
     launchBoidsKernel(
         d_agents,
         agentCountGlobal,

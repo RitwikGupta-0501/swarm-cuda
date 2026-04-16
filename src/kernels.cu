@@ -109,10 +109,10 @@ __global__ void boidsKernel(
         float renderScale = 300.0f;
         float speedScale = 100.0f;
 
-        renderPositions[i].px = self.x;
-        renderPositions[i].py = self.y;
-        renderPositions[i].vx = self.vx;
-        renderPositions[i].vy = self.vy;
+        renderPositions[i].py = self.y * renderScale;
+        renderPositions[i].px = self.x * renderScale;
+        renderPositions[i].vx = self.vx * speedScale;
+        renderPositions[i].vy = self.vy * speedScale;
     }
 }
 
