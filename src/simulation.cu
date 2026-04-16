@@ -8,6 +8,7 @@
 #include <cuda_gl_interop.h>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 static Agent* d_agents = nullptr;
 static Agent* h_agents = nullptr;
@@ -117,4 +118,21 @@ float* getAgentPositions() {
 // 🔢 GET COUNT
 int getAgentCount() {
     return agentCountGlobal;
+}
+
+uint32_t* getAgentTypesArray() {
+    // Keep it static so the memory stays valid and we don't re-allocate
+    static std::vector<uint32_t> types;
+
+    // Only build the array if it hasn't been built or the count changed
+    if (types.size() != agentCountGlobal) {
+        types.resize(agentCountGlobal);
+        for (int i = 0; i < agentCountGlobal; i++) {
+            // Your simulator uses PREY=0, PREDATOR=1, which perfectly
+            // matches the visualizer's expected uint32_t format.
+            types[i] = static_cast<uint32_t>(h_agents[i].type);
+        }
+    }
+
+    return types.data();
 }

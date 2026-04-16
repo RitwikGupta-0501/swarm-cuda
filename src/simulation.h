@@ -1,5 +1,6 @@
 #pragma once
 #include <glad/glad.h>
+#include <cstdint>
 
 // Initialize GPU simulation
 void initSimulation(int agentCount);
@@ -12,3 +13,6 @@ void shutdownSimulation();
 
 float* getAgentPositions();
 int getAgentCount();
+
+// Getter for the visualizer to color agents by type
+uint32_t* getAgentTypesArray();
