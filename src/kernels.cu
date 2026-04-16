@@ -106,6 +106,9 @@ __global__ void boidsKernel(
     agents[i] = self;
 
     if (renderPositions != nullptr) {
+        float renderScale = 300.0f;
+        float speedScale = 100.0f;
+
         renderPositions[i].px = self.x;
         renderPositions[i].py = self.y;
         renderPositions[i].vx = self.vx;
