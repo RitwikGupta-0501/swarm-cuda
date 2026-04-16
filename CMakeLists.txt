@@ -43,6 +43,10 @@ add_executable(swarm-sim
     src/simulation.cu
     src/kernels.cu
     src/spatial_hash.cu
+    src/ui.cpp
+    src/presets.cpp
+    src/obstacles.cpp     
+    src/scenarios.cpp 
 )
 
 target_link_libraries(swarm-sim

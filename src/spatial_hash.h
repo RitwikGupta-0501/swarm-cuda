@@ -2,18 +2,18 @@
 #include "agent.h"
 
 struct SpatialHash {
-    int*   agent_cells;    // cell hash each agent belongs to
-    int*   sorted_agents;  // agent IDs sorted by cell
-    int*   cell_start;     // where each cell begins in sorted list
-    int*   cell_end;       // where each cell ends
-    int    table_size;     // number of buckets
-    float  cell_size;      // = perception_radius
-    int    agent_count;
+    int* cell_start;
+    int* cell_end;
+    int* sorted_agents;
+
+    int* agent_cells;   // required
+    int  agent_count;   // required
+
+    int table_size;
+    float cell_size;
 };
 
-// Call this every frame before stepSimulation
-void buildSpatialHash(SpatialHash& sh, Agent* d_agents, int count, float cell_size);
-
-// Allocate/free GPU memory for the hash
+// function declarations
 void initSpatialHash(SpatialHash& sh, int max_agents);
+void buildSpatialHash(SpatialHash& sh, Agent* d_agents, int count, float cell_size);
 void destroySpatialHash(SpatialHash& sh);
