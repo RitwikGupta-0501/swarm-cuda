@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace swarm {
 namespace {
@@ -89,12 +90,11 @@ glm::vec2 Camera::screenToWorld2D(double sx, double sy) const {
 
 void Camera::onScroll(double yOffset, double cursorX, double cursorY) {
   if (mMode == CameraMode::Ortho2D) {
-    const glm::vec2 worldBefore = screenToWorld2D(cursorX, cursorY);
+    // Simple zoom without position adjustment
     const float zoomFactor = std::pow(1.1f, static_cast<float>(yOffset));
-    m2d.targetZoom = std::clamp(m2d.targetZoom * zoomFactor, 0.05f, 200.0f);
-    const glm::vec2 worldAfter = screenToWorld2D(cursorX, cursorY);
-    // Keep the point under cursor fixed by shifting camera target position.
-    m2d.targetPosition += (worldBefore - worldAfter);
+    m2d.targetZoom = std::clamp(m2d.targetZoom * zoomFactor, 0.1f, 10.0f);
+    // No position changes - let user pan with mouse drag if needed
+    
   } else {
     const float zoomFactor = std::pow(1.1f, static_cast<float>(-yOffset));
     m25d.targetDistance = std::clamp(m25d.targetDistance * zoomFactor, 2.0f, 2000.0f);
@@ -155,11 +155,26 @@ CameraMatrices Camera::matrices(float timeSeconds) const {
   if (mMode == CameraMode::Ortho2D) {
     const float w = static_cast<float>(mW);
     const float h = static_cast<float>(mH);
-    const float invZ = 1.0f / std::max(0.0001f, m2d.zoom);
-    const float halfW = 0.5f * w * invZ;
-    const float halfH = 0.5f * h * invZ;
+    const float aspect = w / h;
+    const float worldHeight = 2.0f / std::max(0.0001f, m2d.zoom);  // zoom 1.0 = 2 unit height
+    const float worldWidth = worldHeight * aspect;
+    const float halfW = 0.5f * worldWidth;
+    const float halfH = 0.5f * worldHeight;
 
-    m.proj = glm::ortho(-halfW, halfW, -halfH, halfH, -1.0f, 1.0f);
+    // DEBUG
+    static int camFrameCount = 0;
+    if (camFrameCount % 30 == 0) {
+      std::cerr << "\n[CAMERA] Frame " << camFrameCount << "\n";
+      std::cerr << "  m2d.zoom=" << m2d.zoom << " m2d.targetZoom=" << m2d.targetZoom << "\n";
+      std::cerr << "  m2d.position=(" << m2d.position.x << "," << m2d.position.y << ")\n";
+      std::cerr << "  m2d.targetPosition=(" << m2d.targetPosition.x << "," << m2d.targetPosition.y << ")\n";
+      std::cerr << "  worldHeight=" << worldHeight << " worldWidth=" << worldWidth << " halfW=" << halfW << " halfH=" << halfH << "\n";
+      std::cerr << "  Ortho frustum: x=[-" << halfW << "," << halfW 
+                << "] y=[-" << halfH << "," << halfH << "]\n";
+    }
+    camFrameCount++;
+
+    m.proj = glm::ortho(-halfW, halfW, -halfH, halfH, -1000.0f, 1000.0f);
 
     glm::mat4 v(1.0f);
     v = glm::rotate(v, -m2d.rotation, glm::vec3(0, 0, 1));

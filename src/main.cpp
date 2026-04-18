@@ -155,10 +155,62 @@ int main()
     swarm::RendererConfig cfg{};
     cfg.maxAgents = params.agentCount;
     std::string err;
+
+    // For Debugging Only
+    static int frameCounter = 0;
+    frameCounter++;
+    
+    // Only print every 30 frames to avoid spam
+    if (frameCounter % 30 == 0) {
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+
+        int curCount = getAgentCount();
+        
+        std::cerr << "\n========== FRAME " << frameCounter << " ==========\n";
+        
+        // Simulation state
+        std::cerr << "[SIM] agents=" << curCount 
+                  << " paused=" << paused 
+                  << " speedFactor=" << params.speedFactor << "\n";
+        
+        // Camera state
+        const swarm::CameraMatrices cam = renderer.camera().matrices(static_cast<float>(glfwGetTime()));
+        std::cerr << "[CAM] mode=" << (cam.mode == swarm::CameraMode::Ortho2D ? "2D" : "2.5D")
+                  << " zoom=" << cam.zoom
+                  << " pos=(" << cam.cameraPos.x << "," << cam.cameraPos.y << "," << cam.cameraPos.z << ")"
+                  << " near_far=[" << (cam.mode == swarm::CameraMode::Ortho2D ? "-1000" : "0.1") << ", "
+                  << (cam.mode == swarm::CameraMode::Ortho2D ? "1000" : "5000") << "]\n";
+        
+        // Viewport frustum
+        std::cerr << "[VIEWPORT] w=" << width << " h=" << height << "\n";
+        
+        // Render state
+        std::cerr << "[RENDER] cullingEnabled=" << (renderer.frustumCullingEnabled() ? "true" : "false")
+                  << " showTrails=" << (renderer.showTrails() ? "true" : "false")
+                  << " showVelocity=" << (renderer.showVelocityVectors() ? "true" : "false")
+                  << " glowEnabled=" << (renderer.glowEnabled() ? "true" : "false") << "\n";
+        
+        // Agent types
+        std::cerr << "[AGENTS] prey=" << stats.preyCount 
+                  << " predators=" << stats.predatorCount 
+                  << " avgSpeed=" << stats.avgSpeed << "\n";
+        
+        // Performance
+        std::cerr << "[PERF] fps=" << stats.fps
+                  << " frame=" << stats.frameTimeMs << "ms"
+                  << " sim=" << stats.simTimeMs << "ms"
+                  << " render=" << stats.renderTimeMs << "ms\n";
+        
+        std::cerr << "==========================================\n\n";
+    }
+    
     if (!renderer.init(cfg, 1280, 800, &err)) {
         std::cerr << "Renderer init failed: " << err << "\n";
         return -1;
     }
+    renderer.setFrustumCullingEnabled(true);   // Enable culling
+    renderer.setCameraMode(swarm::CameraMode::Ortho2D);  // Default to 2D
 
     int agentCount = params.agentCount;
 

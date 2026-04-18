@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 #include <vector>
+#include <iostream>
 
 #if SWARM_ENABLE_CUDA
 #include "interop_cuda_gl.h"
@@ -218,8 +219,11 @@ void Renderer::updateCameraUbo(float timeSeconds) {
 // =============================================================================
 bool Renderer::createAgentPipeline(std::string* outError) {
   ShaderProgram agent;
-  if (!agent.loadFromFiles("shaders/agent.vert", "shaders/agent.frag", outError)) return false;
-  mAgentProgram = agent.release();
+  if (!agent.loadFromFiles("shaders/agent.vert", "shaders/agent.frag", outError)) {
+    std::cerr << "Agent shader error: " << (outError ? *outError : "unknown") << "\n";
+    return false;
+  }
+  std::cerr << "Agent shader loaded successfully\n";
 
   ShaderProgram pts;
   if (!pts.loadFromFiles("shaders/points.vert", "shaders/points.frag", outError)) return false;
@@ -484,6 +488,34 @@ void Renderer::render(int agentCount, float timeSeconds, const FrameStats& frame
   updateCameraUbo(timeSeconds);
 
   const CameraMatrices cam = mCamera.matrices(timeSeconds);
+
+  // DEBUG: Check what's happening with projection
+  static int renderFrameCount = 0;
+  if (renderFrameCount % 30 == 0) {
+    std::cerr << "\n[RENDERER] Frame " << renderFrameCount << "\n";
+    std::cerr << "  agentCount=" << agentCount << "\n";
+    std::cerr << "  cam.zoom=" << cam.zoom << "\n";
+    std::cerr << "  cam.pos=(" << cam.cameraPos.x << "," << cam.cameraPos.y << "," << cam.cameraPos.z << ")\n";
+    std::cerr << "  mViewportW=" << mViewportW << " mViewportH=" << mViewportH << "\n";
+    
+    // Print projection matrix (first row to see scale)
+    std::cerr << "  proj[0][0]=" << cam.proj[0][0] 
+              << " proj[1][1]=" << cam.proj[1][1] << "\n";
+    
+    // Check if agents would be in frustum
+    if (agentCount > 0) {
+      std::cerr << "  Agent space: [-1, 1] for x,y\n";
+      std::cerr << "  Frustum size (halfW, halfH): "
+                << (mViewportW / (2.0f * cam.zoom)) << ", "
+                << (mViewportH / (2.0f * cam.zoom)) << "\n";
+    }
+  }
+  renderFrameCount++;
+
+  
+  std::cerr << "Camera: zoom=" << cam.zoom 
+          << " pos=(" << cam.cameraPos.x << "," << cam.cameraPos.y << "," 
+          << cam.cameraPos.z << ")\n";
 
   if (mGlowEnabled && mBloom.sceneFbo) {
     glBindFramebuffer(GL_FRAMEBUFFER, mBloom.sceneFbo);
