@@ -2,7 +2,7 @@
 #include <fstream>
 #include <cstdio>
 #include <cstring>
-#include <direct.h>   // _mkdir on Windows
+#include <filesystem>
  
 // ─── Built-in preset data ─────────────────────────────────────────────────────
 struct PresetData {
@@ -49,8 +49,7 @@ static std::string intField(const char* key, int val) {
 }
  
 void savePreset(const std::string& name, const SimParams& p) {
-    // Windows-compatible directory creation
-    _mkdir("config");
+    std::filesystem::create_directories("config");
  
     std::ofstream f("config/presets.json", std::ios::app);
     if (!f.is_open()) return;

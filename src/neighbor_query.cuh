@@ -38,7 +38,7 @@ __device__ inline void queryNeighbors(
 
                 float ddx = agents[nid].x - px;
                 float ddy = agents[nid].y - py;
-                float dist = sqrtf(ddx*ddx + ddy*ddy);
+                float dist = sqrtf(ddx*ddx + ddy*ddy) + 1e-6f;
 
                 if (dist < radius && dist > 0.0f) {
                     *aliX += agents[nid].vx;
@@ -47,7 +47,7 @@ __device__ inline void queryNeighbors(
                     *cohY += agents[nid].y;
                     (*neighbors)++;
                 }
-                if (dist < 0.02f && dist > 0.0f) {
+                if (dist < radius * 0.5f && dist > 0.0f) {
                     *sepX -= ddx / dist;
                     *sepY -= ddy / dist;
                 }

@@ -14,7 +14,7 @@ void launchBoidsKernel(
     Agent* d_agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
     int tableSize, float cellSize,
-    float2* renderPositions,
+    float4* renderPositions,
 
     float separation,
     float alignment,

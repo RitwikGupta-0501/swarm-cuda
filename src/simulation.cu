@@ -124,7 +124,7 @@ void convertRandomAgent()
 void stepSimulation(float dt, float mouseX, float mouseY,
                     const SimParams& params)
 {
-    float2* d_positions = nullptr;
+    float4* d_positions = nullptr;
 
     if (renderResource != nullptr) {
         cudaGraphicsMapResources(1, &renderResource, 0);

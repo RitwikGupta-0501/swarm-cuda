@@ -71,7 +71,7 @@ __global__ void boidsKernel(
     Agent* agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
     int tableSize, float cellSize,
-    float2* renderPositions,
+    float4* renderPositions,
 
     float separation, float alignment, float cohesion,
     float perceptionRadius, float maxSpeed, float maxForce,
@@ -173,8 +173,8 @@ __global__ void boidsKernel(
 
     self.vx += ax * dt * speedFactor;
     self.vy += ay * dt * speedFactor;
-    self.vx *= 0.90f;
-    self.vy *= 0.90f;
+    self.vx *= 0.99f;
+    self.vy *= 0.99f;
 
     float vel = sqrtf(self.vx*self.vx + self.vy*self.vy);
     if (vel > currentMaxSpeed) {
@@ -188,7 +188,7 @@ __global__ void boidsKernel(
     agents[i] = self;
 
     if (renderPositions != nullptr)
-        renderPositions[i] = make_float2(self.x, self.y);
+        renderPositions[i] = make_float4(self.x, self.y, self.vx, self.vy);
 }
 
 // ─── Launcher ────────────────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ void launchBoidsKernel(
     Agent* d_agents, int count, float dt, float mouseX, float mouseY,
     int* cellStart, int* cellEnd, int* particleIndex,
     int tableSize, float cellSize,
-    float2* renderPositions,
+    float4* renderPositions,
     float separation, float alignment, float cohesion,
     float perceptionRadius, float maxSpeed, float maxForce,
     float predatorRatio, float predatorSpeedMul, float fearWeight,

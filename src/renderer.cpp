@@ -252,21 +252,21 @@ bool Renderer::createSharedAgentBuffer(std::string* outError) {
   }
 
   const GLsizeiptr bytes =
-      static_cast<GLsizeiptr>(mCfg.maxAgents) * static_cast<GLsizeiptr>(sizeof(Agent));
+      static_cast<GLsizeiptr>(mCfg.maxAgents) * static_cast<GLsizeiptr>(sizeof(RenderAgent));
   SWARM_GL_CALL(glNamedBufferData(mAgentVbo, bytes, nullptr, GL_DYNAMIC_DRAW));
 
-  // Binding 1: instance buffer (Agent), stride 16 bytes.
-  glVertexArrayVertexBuffer(mAgentVao, 1, mAgentVbo, 0, sizeof(Agent));
+  // Binding 1: instance buffer (RenderAgent), stride 16 bytes.
+  glVertexArrayVertexBuffer(mAgentVao, 1, mAgentVbo, 0, sizeof(RenderAgent));
 
   // iPosition (location 1).
   glEnableVertexArrayAttrib(mAgentVao, 1);
-  glVertexArrayAttribFormat(mAgentVao, 1, 2, GL_FLOAT, GL_FALSE, offsetof(Agent, position_x));
+  glVertexArrayAttribFormat(mAgentVao, 1, 2, GL_FLOAT, GL_FALSE, offsetof(RenderAgent, position_x));
   glVertexArrayAttribBinding(mAgentVao, 1, 1);
   glVertexArrayBindingDivisor(mAgentVao, 1, 1);
 
   // iVelocity (location 2).
   glEnableVertexArrayAttrib(mAgentVao, 2);
-  glVertexArrayAttribFormat(mAgentVao, 2, 2, GL_FLOAT, GL_FALSE, offsetof(Agent, velocity_x));
+  glVertexArrayAttribFormat(mAgentVao, 2, 2, GL_FLOAT, GL_FALSE, offsetof(RenderAgent, velocity_x));
   glVertexArrayAttribBinding(mAgentVao, 2, 1);
   glVertexArrayBindingDivisor(mAgentVao, 1, 1);
 
@@ -310,7 +310,7 @@ bool Renderer::createCullPipeline(std::string* outError) {
 
   // Visible agent SSBO (same size as the full agent buffer).
   const GLsizeiptr agentBytes =
-      static_cast<GLsizeiptr>(mCfg.maxAgents) * static_cast<GLsizeiptr>(sizeof(Agent));
+      static_cast<GLsizeiptr>(mCfg.maxAgents) * static_cast<GLsizeiptr>(sizeof(RenderAgent));
   SWARM_GL_CALL(glCreateBuffers(1, &mVisibleAgentSsbo));
   SWARM_GL_CALL(glNamedBufferData(mVisibleAgentSsbo, agentBytes, nullptr, GL_DYNAMIC_COPY));
 
@@ -348,16 +348,16 @@ bool Renderer::createCullPipeline(std::string* outError) {
   SWARM_GL_CALL(glVertexArrayAttribBinding(mCullAgentVao, 0, 0));
 
   // Binding 1: instanced per-agent data from visible-agent SSBO.
-  SWARM_GL_CALL(glVertexArrayVertexBuffer(mCullAgentVao, 1, mVisibleAgentSsbo, 0, sizeof(Agent)));
+  SWARM_GL_CALL(glVertexArrayVertexBuffer(mCullAgentVao, 1, mVisibleAgentSsbo, 0, sizeof(RenderAgent)));
   SWARM_GL_CALL(glEnableVertexArrayAttrib(mCullAgentVao, 1));
   SWARM_GL_CALL(glVertexArrayAttribFormat(mCullAgentVao, 1, 2, GL_FLOAT, GL_FALSE,
-                                           offsetof(Agent, position_x)));
+                                           offsetof(RenderAgent, position_x)));
   SWARM_GL_CALL(glVertexArrayAttribBinding(mCullAgentVao, 1, 1));
   SWARM_GL_CALL(glVertexArrayBindingDivisor(mCullAgentVao, 1, 1));
 
   SWARM_GL_CALL(glEnableVertexArrayAttrib(mCullAgentVao, 2));
   SWARM_GL_CALL(glVertexArrayAttribFormat(mCullAgentVao, 2, 2, GL_FLOAT, GL_FALSE,
-                                           offsetof(Agent, velocity_x)));
+                                           offsetof(RenderAgent, velocity_x)));
   SWARM_GL_CALL(glVertexArrayAttribBinding(mCullAgentVao, 2, 1));
   SWARM_GL_CALL(glVertexArrayBindingDivisor(mCullAgentVao, 1, 1));
 
@@ -577,13 +577,13 @@ void Renderer::render(int agentCount, float timeSeconds, const FrameStats& frame
   }
 
   // ── Debug Overlay Text ───────────────────────────────────────────────────
-  if (mDebug) {
-    glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 3, -1, "debug_overlay_text");
-    mDebug->drawOverlayText(frameStats, agentCount,
-                            static_cast<int>(mVizMode),
-                            static_cast<int>(cam.mode));
-    glPopDebugGroup();
-  }
+  // if (mDebug) {
+  //   glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 3, -1, "debug_overlay_text");
+  //   mDebug->drawOverlayText(frameStats, agentCount,
+  //                           static_cast<int>(mVizMode),
+  //                           static_cast<int>(cam.mode));
+  //   glPopDebugGroup();
+  // }
 }
 
 void Renderer::render(int agentCount) {

@@ -42,11 +42,19 @@ add_executable(swarm-sim
     src/main.cpp
     src/simulation.cu
     src/kernels.cu
+    src/gl_shader.cpp
+    src/debug_draw.cpp
+    src/error.cpp
+    src/gl_buffer.cpp
+    src/interop_cuda_gl.cu
     src/spatial_hash.cu
     src/ui.cpp
     src/presets.cpp
     src/obstacles.cpp     
     src/scenarios.cpp 
+    src/renderer.cpp
+    src/camera.cpp
+    src/time_stats.cpp
 )
 
 target_link_libraries(swarm-sim
