@@ -1,0 +1,36 @@
+#version 460 core
+layout(local_size_x = 256) in;
+
+// ---- Source: live agent positions ----
+struct Agent {
+  float position_x;
+  float position_y;
+  float velocity_x;
+  float velocity_y;
+};
+
+layout(std430, binding = 1) readonly buffer AgentIn {
+  Agent agents[];
+};
+
+// ---- Destination: ring-buffer of past positions ----
+// Layout: trailBuf[agentId * uTrailLength + slot]
+// Each entry is vec2 (x, y) packed as two floats = 8 bytes.
+layout(std430, binding = 4) buffer TrailBuf {
+  float trailData[];   // stride 2 floats per point
+};
+
+uniform uint uAgentCount;
+uniform uint uTrailLength;   // number of history slots (e.g. 20)
+uniform uint uFrameIdx;      // current frame index (wraps around uTrailLength)
+
+void main() {
+  uint id = gl_GlobalInvocationID.x;
+  if (id >= uAgentCount) return;
+
+  uint slot   = uFrameIdx % uTrailLength;
+  uint base   = (id * uTrailLength + slot) * 2u;  // 2 floats per entry
+
+  trailData[base + 0u] = agents[id].position_x;
+  trailData[base + 1u] = agents[id].position_y;
+}

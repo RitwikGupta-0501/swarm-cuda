@@ -1,0 +1,67 @@
+#version 460 core
+layout(local_size_x = 256) in;
+
+// ---- Shared Agent VBO exposed as SSBO (binding 1) ----
+struct Agent {
+  float position_x;
+  float position_y;
+  float velocity_x;
+  float velocity_y;
+};
+
+layout(std430, binding = 1) readonly buffer AgentIn {
+  Agent agents[];
+};
+
+// ---- Agent types input (binding 5) ----
+layout(std430, binding = 5) readonly buffer AgentTypeBuf {
+  uint agentTypes[];
+};
+
+// ---- Compacted visible agent output (binding 2) ----
+layout(std430, binding = 2) writeonly buffer VisibleAgents {
+  Agent visAgents[];
+};
+
+// ---- Compacted visible agent types (binding 6) ----
+layout(std430, binding = 6) writeonly buffer VisibleAgentTypes {
+  uint visAgentTypes[];
+};
+
+// ---- Compacted visible original agent IDs (binding 7) ----
+// Used by culled trail rendering.
+layout(std430, binding = 7) writeonly buffer VisibleAgentIds {
+  uint visAgentIds[];
+};
+
+// ---- GL DrawArraysIndirectCommand (binding 3) ----
+layout(std430, binding = 3) buffer DrawCmd {
+  uint vertCount;       
+  uint instanceCount;   
+  uint first;           
+  uint baseInstance;    
+};
+
+uniform vec2 uCullMin;
+uniform vec2 uCullMax;
+uniform uint uAgentCount;
+
+void main() {
+  uint id = gl_GlobalInvocationID.x;
+  if (id >= uAgentCount) return;
+
+  Agent a = agents[id];
+  vec2 pos = vec2(a.position_x, a.position_y);
+
+  // Arrow radius padding
+  const float pad = 12.0;
+  bool visible = (pos.x >= uCullMin.x - pad) && (pos.x <= uCullMax.x + pad)
+              && (pos.y >= uCullMin.y - pad) && (pos.y <= uCullMax.y + pad);
+
+  if (visible) {
+    uint slot = atomicAdd(instanceCount, 1u);
+    visAgents[slot] = a;
+    visAgentTypes[slot] = agentTypes[id];
+    visAgentIds[slot] = id;
+  }
+}
