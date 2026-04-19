@@ -268,6 +268,8 @@ int main()
             case COLOR_RAINBOW:  renderer.setVizMode(swarm::VizMode::RainbowTime); break;
         }
 
+        renderer.setShowVelocityVectors(renderOpts.showVelocity);
+
         renderer.render(curCount, static_cast<float>(glfwGetTime()), swarm::FrameStats{});
 
         swarm::CameraMatrices camMats = renderer.camera().matrices(0.0f);
