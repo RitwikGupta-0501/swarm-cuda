@@ -10,6 +10,7 @@
 #include <cstring>
 #include <vector>
 #include <iostream>
+#include <iomanip>
 
 #if SWARM_ENABLE_CUDA
 #include "interop_cuda_gl.h"
@@ -44,9 +45,11 @@ struct WorldAabb {
 
 WorldAabb cameraWorldAabb(const CameraMatrices& cam, int vpW, int vpH) {
   if (cam.mode == CameraMode::Ortho2D) {
-    const float invZ = 1.0f / std::max(0.0001f, cam.zoom);
-    const float halfW = 0.5f * static_cast<float>(vpW) * invZ;
-    const float halfH = 0.5f * static_cast<float>(vpH) * invZ;
+    const float aspect = static_cast<float>(vpW) / static_cast<float>(vpH);
+    const float worldHeight = 2.0f / std::max(0.0001f, cam.zoom);
+    const float worldWidth = worldHeight * aspect;
+    const float halfW = 0.5f * worldWidth;
+    const float halfH = 0.5f * worldHeight;
     const glm::vec2 center{cam.cameraPos.x, cam.cameraPos.y};
     // Conservative: add half-diagonal for rotated camera frustum.
     const float pad = std::sqrt(halfW * halfW + halfH * halfH);
@@ -230,7 +233,9 @@ bool Renderer::createAgentPipeline(std::string* outError) {
   mPointsProgram = pts.release();
 
   // Base arrow geometry in XY plane, pointing +X in model space.
-  const float base[] = {10.0f, 0.0f, -6.0f, 4.0f, -6.0f, -4.0f};
+  // Scaled down to match the new [-1, 1] normalized coordinate space.
+  const float s = 0.003f;
+  const float base[] = {10.0f*s, 0.0f, -6.0f*s, 4.0f*s, -6.0f*s, -4.0f*s};
 
   SWARM_GL_CALL(glCreateVertexArrays(1, &mAgentVao));
   SWARM_GL_CALL(glCreateBuffers(1, &mAgentBaseVbo));
@@ -325,7 +330,9 @@ bool Renderer::createCullPipeline(std::string* outError) {
                                    &initCmd, GL_DYNAMIC_DRAW));
 
   // VAO that sources instanced attributes from the visible-agent SSBO.
-  const float base[] = {10.0f, 0.0f, -6.0f, 4.0f, -6.0f, -4.0f};
+  // Scaled down to match the new [-1, 1] normalized coordinate space.
+  const float s = 0.003f;
+  const float base[] = {10.0f*s, 0.0f, -6.0f*s, 4.0f*s, -6.0f*s, -4.0f*s};
   SWARM_GL_CALL(glCreateBuffers(1, &mCullAgentBaseVbo));
   SWARM_GL_CALL(glNamedBufferData(mCullAgentBaseVbo, sizeof(base), base, GL_STATIC_DRAW));
 
@@ -374,6 +381,16 @@ void Renderer::dispatchCull(int agentCount, const CameraMatrices& cam) {
   SWARM_GL_CALL(glNamedBufferSubData(mDrawCmdBuf, 0, sizeof(DrawArraysIndirectCommand), &resetCmd));
 
   const WorldAabb aabb = cameraWorldAabb(cam, mViewportW, mViewportH);
+
+  // DEBUG: Check cull bounds
+  static int cullFrameCount = 0;
+  if (cullFrameCount % 10 == 0) {
+    std::cerr << "[CULL] Frame " << cullFrameCount 
+              << " | aabb=[" << aabb.min.x << "," << aabb.max.x << "] x [" 
+              << aabb.min.y << "," << aabb.max.y << "]\n";
+    std::cerr << "       | agentSpace=[-1,1] x [-1,1]\n";
+  }
+  cullFrameCount++;
 
   glUseProgram(mCullProgram);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, mAgentVbo);
@@ -491,31 +508,18 @@ void Renderer::render(int agentCount, float timeSeconds, const FrameStats& frame
 
   // DEBUG: Check what's happening with projection
   static int renderFrameCount = 0;
-  if (renderFrameCount % 30 == 0) {
-    std::cerr << "\n[RENDERER] Frame " << renderFrameCount << "\n";
-    std::cerr << "  agentCount=" << agentCount << "\n";
-    std::cerr << "  cam.zoom=" << cam.zoom << "\n";
-    std::cerr << "  cam.pos=(" << cam.cameraPos.x << "," << cam.cameraPos.y << "," << cam.cameraPos.z << ")\n";
-    std::cerr << "  mViewportW=" << mViewportW << " mViewportH=" << mViewportH << "\n";
+  if (renderFrameCount % 10 == 0) {
+    std::cerr << "[RENDER] Frame " << renderFrameCount 
+              << " | zoom=" << std::fixed << std::setprecision(6) << cam.zoom
+              << " | camPos=(" << cam.cameraPos.x << "," << cam.cameraPos.y << ")"
+              << " | agentCount=" << agentCount << "\n";
     
-    // Print projection matrix (first row to see scale)
-    std::cerr << "  proj[0][0]=" << cam.proj[0][0] 
-              << " proj[1][1]=" << cam.proj[1][1] << "\n";
-    
-    // Check if agents would be in frustum
-    if (agentCount > 0) {
-      std::cerr << "  Agent space: [-1, 1] for x,y\n";
-      std::cerr << "  Frustum size (halfW, halfH): "
-                << (mViewportW / (2.0f * cam.zoom)) << ", "
-                << (mViewportH / (2.0f * cam.zoom)) << "\n";
-    }
+    // Check projection matrix
+    std::cerr << "         | proj[0][0]=" << cam.proj[0][0] 
+              << " proj[1][1]=" << cam.proj[1][1]
+              << " proj[2][2]=" << cam.proj[2][2] << "\n";
   }
   renderFrameCount++;
-
-  
-  std::cerr << "Camera: zoom=" << cam.zoom 
-          << " pos=(" << cam.cameraPos.x << "," << cam.cameraPos.y << "," 
-          << cam.cameraPos.z << ")\n";
 
   if (mGlowEnabled && mBloom.sceneFbo) {
     glBindFramebuffer(GL_FRAMEBUFFER, mBloom.sceneFbo);

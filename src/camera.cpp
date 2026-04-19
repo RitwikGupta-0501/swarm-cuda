@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 
 namespace swarm {
@@ -162,19 +163,15 @@ CameraMatrices Camera::matrices(float timeSeconds) const {
     const float halfH = 0.5f * worldHeight;
 
     // DEBUG
-    static int camFrameCount = 0;
-    if (camFrameCount % 30 == 0) {
-      std::cerr << "\n[CAMERA] Frame " << camFrameCount << "\n";
-      std::cerr << "  m2d.zoom=" << m2d.zoom << " m2d.targetZoom=" << m2d.targetZoom << "\n";
-      std::cerr << "  m2d.position=(" << m2d.position.x << "," << m2d.position.y << ")\n";
-      std::cerr << "  m2d.targetPosition=(" << m2d.targetPosition.x << "," << m2d.targetPosition.y << ")\n";
-      std::cerr << "  worldHeight=" << worldHeight << " worldWidth=" << worldWidth << " halfW=" << halfW << " halfH=" << halfH << "\n";
-      std::cerr << "  Ortho frustum: x=[-" << halfW << "," << halfW 
-                << "] y=[-" << halfH << "," << halfH << "]\n";
-    }
-    camFrameCount++;
+    // static int camFrameCount = 0;
+    // camFrameCount++;
 
-    m.proj = glm::ortho(-halfW, halfW, -halfH, halfH, -1000.0f, 1000.0f);
+    // std::cerr << "[CAM] Frame " << camFrameCount 
+    //           << " | zoom=" << std::fixed << std::setprecision(6) << m2d.zoom
+    //           << " | world=(" << worldWidth << "x" << worldHeight << ")"
+    //           << " | frustum=[" << -halfW << "," << halfW << "] x [" << -halfH << "," << halfH << "]\n";
+
+    m.proj = glm::ortho(-halfW, halfW, -halfH, halfH, -1.0f, 1.0f);
 
     glm::mat4 v(1.0f);
     v = glm::rotate(v, -m2d.rotation, glm::vec3(0, 0, 1));
