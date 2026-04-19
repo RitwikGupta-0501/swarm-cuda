@@ -534,7 +534,7 @@ namespace swarm {
         // is sourced from SSBOs via gl_VertexID / gl_InstanceID.
         glBindVertexArray(mDummyVao);
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
         glDisable(GL_DEPTH_TEST);
 
         // If culling is enabled, use the compacted original IDs from binding 7

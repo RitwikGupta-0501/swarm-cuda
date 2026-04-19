@@ -275,7 +275,11 @@ int main()
             case COLOR_RAINBOW:  renderer.setVizMode(swarm::VizMode::RainbowTime); break;
         }
 
+        renderer.setTrailLength(static_cast<int>(renderOpts.trailLength));
+        renderer.setShowTrails(renderOpts.trailLength > 0.0f);
+
         renderer.setShowVelocityVectors(renderOpts.showVelocity);
+
         renderer.setShowGrid(renderOpts.showGrid);
 
         renderer.render(curCount, static_cast<float>(glfwGetTime()), swarm::FrameStats{});

@@ -69,6 +69,7 @@ public:
 
   void setShowTrails(bool v) { mShowTrails = v; }
   bool showTrails()   const  { return mShowTrails; }
+  void setTrailLength(int length) { mCfg.trailLength = length; }
 
   void setFrustumCullingEnabled(bool v) { mFrustumCullingEnabled = v; }
   bool frustumCullingEnabled()   const  { return mFrustumCullingEnabled; }
