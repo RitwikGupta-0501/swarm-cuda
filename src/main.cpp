@@ -26,16 +26,13 @@
 #include "ui.h"
 #include "simulation.h"
 #include "obstacles.h"
-#include "presets.h"
 
 #include <iostream>
 #include <fstream>
-#include <sstream>
 #include <chrono>
 #include <vector>
 #include <string>
 #include <cstdio>
-#include <cmath>
 #include <filesystem>
 #include "renderer.h"
 
