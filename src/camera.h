@@ -43,6 +43,7 @@ struct CameraMatrices {
 class Camera {
 public:
   void setViewport(int w, int h);
+  void setFov(float fov) { mFov = fov; }
   void setMode(CameraMode m);
   CameraMode mode() const { return mMode; }
 
@@ -60,6 +61,7 @@ public:
 private:
   int mW = 1280;
   int mH = 720;
+  float mFov = 60.0f;
   CameraMode mMode = CameraMode::Ortho2D;
 
   CameraState2D m2d{};
@@ -77,4 +79,3 @@ private:
 };
 
 } // namespace swarm
-

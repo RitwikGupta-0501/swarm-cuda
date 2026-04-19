@@ -174,7 +174,7 @@ CameraMatrices Camera::matrices(float timeSeconds) const {
     (void)timeSeconds;
   } else {
     const float aspect = static_cast<float>(mW) / static_cast<float>(mH);
-    m.proj = glm::perspective(glm::radians(55.0f), aspect, 0.1f, 5000.0f);
+    m.proj = glm::perspective(glm::radians(mFov), aspect, 0.1f, 5000.0f);
 
     const float cy = std::cos(m25d.yaw);
     const float sy = std::sin(m25d.yaw);

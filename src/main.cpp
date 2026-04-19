@@ -282,6 +282,7 @@ int main()
         renderer.setShowVelocityVectors(renderOpts.showVelocity);
 
         renderer.setAgentSize(renderOpts.agentSize);
+        renderer.camera().setFov(renderOpts.cameraFOV);
 
         renderer.setShowGrid(renderOpts.showGrid);
 
