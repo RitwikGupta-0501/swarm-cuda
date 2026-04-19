@@ -276,6 +276,7 @@ int main()
         }
 
         renderer.setShowVelocityVectors(renderOpts.showVelocity);
+        renderer.setShowGrid(renderOpts.showGrid);
 
         renderer.render(curCount, static_cast<float>(glfwGetTime()), swarm::FrameStats{});
 

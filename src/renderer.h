@@ -76,6 +76,9 @@ public:
   void setGlowEnabled(bool v) { mGlowEnabled = v; }
   bool glowEnabled()   const  { return mGlowEnabled; }
 
+  void setShowGrid(bool show) { mShowGrid = show; }
+  bool showGrid() const { return mShowGrid; }
+
   // ── Agent type API ────────────────────────────────────────────────────────
   // Upload an array of per-agent types (0=prey, 1=predator) to the GPU.
   // Call once after simulation sets up agent roles.
@@ -102,6 +105,7 @@ private:
   bool mShowTrails            = false;
   bool mFrustumCullingEnabled = true;
   bool mGlowEnabled           = false;
+  bool mShowGrid = false;
 
   // ── Core camera UBO ───────────────────────────────────────────────────────
   GLuint mCameraUbo = 0;

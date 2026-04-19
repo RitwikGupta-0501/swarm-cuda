@@ -16,7 +16,7 @@ struct RenderOptions {
     float       agentSize     = 3.0f;
     float       trailLength   = 0.0f;   // 0 = off
     float       cameraFOV     = 45.0f;
-    bool        showGrid      = false;
+    bool        showGrid      = true;
     bool        showVelocity  = false;
 };
 

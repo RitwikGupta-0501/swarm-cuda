@@ -585,10 +585,10 @@ namespace swarm {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // ── Grid / Axes ─────────────────────────────────────────────────────────
-        if (mDebug) {
-        glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 1, -1, "debug_grid_axes");
-        mDebug->drawGridAndAxes(cam);
-        glPopDebugGroup();
+        if (mDebug && mShowGrid) {
+            glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 1, -1, "debug_grid_axes");
+            mDebug->drawGridAndAxes(cam);
+            glPopDebugGroup();
         }
 
         // ── Task 1.6: Trail — update ring buffer, then render BEFORE agents ────
