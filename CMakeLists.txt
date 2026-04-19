@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.18)
 project(SwarmSim LANGUAGES C CXX CUDA)
 
+if (MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_CUDA_ARCHITECTURES native) # Adjust for your GPU
+set(CMAKE_CUDA_ARCHITECTURES 86) # Adjust for your GPU
 
 # Find OpenGL
 find_package(OpenGL REQUIRED)
