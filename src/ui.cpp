@@ -187,7 +187,9 @@ void renderFullUI(SimParams&              params,
 
     // ── Predator-Prey ─────────────────────────────────────────────────────────
     if (ImGui::CollapsingHeader("Predator / Prey")) {
-        ImGui::SliderFloat("Predator Ratio",     &params.predatorRatio,    0.0f, 0.5f);
+        if (ImGui::SliderFloat("Predator Ratio", &params.predatorRatio, 0.0f, 0.5f)) {
+            params.reinitRequested = true;
+        }
         ImGui::SliderFloat("Predator Speed Mul", &params.predatorSpeedMul, 1.0f, 3.0f);
         ImGui::SliderFloat("Fear Weight",        &params.fearWeight,       0.0f, 10.0f);
         HelpMarker("How strongly prey flee from predators.");
