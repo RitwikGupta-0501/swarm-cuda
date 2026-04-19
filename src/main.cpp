@@ -116,9 +116,18 @@ static void scrollCb(GLFWwindow* w, double /*xoff*/, double yoff) {
 
 static void keyCb(GLFWwindow* w, int key, int scancode, int action, int mods) {
     ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureKeyboard && io.WantTextInput) return;
     auto* renderer = static_cast<swarm::Renderer*>(glfwGetWindowUserPointer(w));
-    if (renderer) renderer->camera().onKey(key, scancode, action, mods);
+    if (!renderer) return;
+
+    // Toggle camera mode on 'C' press
+    if (action == GLFW_PRESS && key == GLFW_KEY_C) {
+        const auto m = renderer->camera().mode();
+        renderer->setCameraMode(
+            m == swarm::CameraMode::Ortho2D ? swarm::CameraMode::Perspective25D : swarm::CameraMode::Ortho2D);
+    }
+
+    if (io.WantCaptureKeyboard && io.WantTextInput) return;
+    renderer->camera().onKey(key, scancode, action, mods);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,7 +164,7 @@ int main()
     swarm::RendererConfig cfg{};
     cfg.maxAgents = params.agentCount;
     std::string err;
-    
+
     if (!renderer.init(cfg, 1280, 800, &err)) {
         std::cerr << "Renderer init failed: " << err << "\n";
         return -1;
@@ -226,14 +235,14 @@ int main()
 
             initSimulation(agentCount, params);
             registerRenderBuffer(renderer.getAgentVbo());
-            
+
             std::vector<uint32_t> types(agentCount, 0);
             int numPreds = static_cast<int>(agentCount * params.predatorRatio);
             for (int i = 0; i < numPreds; ++i) {
                 types[i] = 1;
             }
             renderer.uploadAgentTypes(types.data(), agentCount);
-            
+
             params.reinitRequested = false;
         }
 
@@ -254,7 +263,7 @@ int main()
 
         // ── Render simulation ──────────────────────────────────────────────────
         int curCount = getAgentCount();
-        
+
         switch (renderOpts.colorScheme) {
             case COLOR_UNIFORM:  renderer.setVizMode(swarm::VizMode::Uniform); break;
             case COLOR_VELOCITY: renderer.setVizMode(swarm::VizMode::VelocityHeat); break;
@@ -263,6 +272,13 @@ int main()
         }
 
         renderer.render(curCount, static_cast<float>(glfwGetTime()), swarm::FrameStats{});
+
+        swarm::CameraMatrices camMats = renderer.camera().matrices(0.0f);
+        stats.cameraMode = static_cast<int>(camMats.mode);
+        stats.camX       = camMats.cameraPos.x;
+        stats.camY       = camMats.cameraPos.y;
+        stats.camZ       = camMats.cameraPos.z;
+        stats.camZoom    = camMats.zoom;
 
         // ── ImGui UI ──────────────────────────────────────────────────────────
         renderFullUI(params, renderOpts, stats, obstacles,

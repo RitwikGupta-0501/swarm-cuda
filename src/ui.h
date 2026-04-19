@@ -71,6 +71,11 @@ struct SimStats {
     float avgSpeed      = 0.0f;
     int   predatorCount = 0;
     int   preyCount     = 0;
+    int   cameraMode    = 0;
+    float camX          = 0.0f;
+    float camY          = 0.0f;
+    float camZ          = 0.0f;
+    float camZoom       = 1.0f;
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────

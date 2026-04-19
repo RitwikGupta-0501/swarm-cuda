@@ -1,7 +1,7 @@
 #include "kernels.h"
 #include "agent.h"
 #include "neighbor_query.cuh"
-#include "spatial_hash.h"
+#include <stdio.h>
 #include <math.h>
 #include <cmath>
 
@@ -187,8 +187,13 @@ __global__ void boidsKernel(
 
     agents[i] = self;
 
-    if (renderPositions != nullptr)
+    if (renderPositions != nullptr) {
         renderPositions[i] = make_float4(self.x, self.y, self.vx, self.vy);
+        if (i < 3) {  // First 3 agents only
+            printf("GPU Agent[%d]: pos=(%.3f, %.3f) vel=(%.3f, %.3f)\n",
+                   i, self.x, self.y, self.vx, self.vy);
+        }
+    }
 }
 
 // ─── Launcher ────────────────────────────────────────────────────────────────

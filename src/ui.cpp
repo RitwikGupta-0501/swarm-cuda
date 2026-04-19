@@ -97,6 +97,15 @@ void renderFullUI(SimParams&              params,
         ImGui::Text("Prey        %d", stats.preyCount);
         ImGui::Text("Predators   %d", stats.predatorCount);
         ImGui::Text("Avg speed   %.3f", stats.avgSpeed);
+        ImGui::Separator();
+        ImGui::Text("Cam Mode    %s", stats.cameraMode == 0 ? "2D" : "2.5D");
+        if (stats.cameraMode == 0) {
+            ImGui::Text("Pos         %.2f, %.2f", stats.camX, stats.camY);
+            ImGui::Text("Zoom        %.2f", stats.camZoom);
+        } else {
+            ImGui::Text("Pos         %.1f, %.1f", stats.camX, stats.camY);
+            ImGui::Text("Alt         %.1f", stats.camZ);
+        }
         ImGui::End();
     }
 

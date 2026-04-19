@@ -226,6 +226,8 @@ bool Renderer::createAgentPipeline(std::string* outError) {
     std::cerr << "Agent shader error: " << (outError ? *outError : "unknown") << "\n";
     return false;
   }
+
+  mAgentProgram = agent.release();
   std::cerr << "Agent shader loaded successfully\n";
 
   ShaderProgram pts;
@@ -382,16 +384,6 @@ void Renderer::dispatchCull(int agentCount, const CameraMatrices& cam) {
 
   const WorldAabb aabb = cameraWorldAabb(cam, mViewportW, mViewportH);
 
-  // DEBUG: Check cull bounds
-  static int cullFrameCount = 0;
-  if (cullFrameCount % 10 == 0) {
-    std::cerr << "[CULL] Frame " << cullFrameCount 
-              << " | aabb=[" << aabb.min.x << "," << aabb.max.x << "] x [" 
-              << aabb.min.y << "," << aabb.max.y << "]\n";
-    std::cerr << "       | agentSpace=[-1,1] x [-1,1]\n";
-  }
-  cullFrameCount++;
-
   glUseProgram(mCullProgram);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, mAgentVbo);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, mVisibleAgentSsbo);
@@ -408,16 +400,21 @@ void Renderer::dispatchCull(int agentCount, const CameraMatrices& cam) {
   const GLuint groups = (static_cast<GLuint>(agentCount) + 255u) / 256u;
   SWARM_GL_CALL(glDispatchCompute(groups, 1, 1));
 
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
   // Sync both draw commands (agents and trails) and the instance buffers.
   // We need to copy instanceCount from mDrawCmdBuf[1] to mTrailDrawCmdBuf[1].
   // Both buffers use the same struct layout.
-  glCopyNamedBufferSubData(mDrawCmdBuf, sizeof(uint32_t),
-                           mTrailDrawCmdBuf, sizeof(uint32_t),
-                           sizeof(uint32_t));
+  glCopyNamedBufferSubData(
+        mDrawCmdBuf,
+        mTrailDrawCmdBuf,
+        sizeof(uint32_t),
+        sizeof(uint32_t),
+        sizeof(uint32_t)
+    );
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT |
                   GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-}
 
 // =============================================================================
 // Task 1.6 — Motion Trails
@@ -506,21 +503,6 @@ void Renderer::render(int agentCount, float timeSeconds, const FrameStats& frame
 
   const CameraMatrices cam = mCamera.matrices(timeSeconds);
 
-  // DEBUG: Check what's happening with projection
-  static int renderFrameCount = 0;
-  if (renderFrameCount % 10 == 0) {
-    std::cerr << "[RENDER] Frame " << renderFrameCount 
-              << " | zoom=" << std::fixed << std::setprecision(6) << cam.zoom
-              << " | camPos=(" << cam.cameraPos.x << "," << cam.cameraPos.y << ")"
-              << " | agentCount=" << agentCount << "\n";
-    
-    // Check projection matrix
-    std::cerr << "         | proj[0][0]=" << cam.proj[0][0] 
-              << " proj[1][1]=" << cam.proj[1][1]
-              << " proj[2][2]=" << cam.proj[2][2] << "\n";
-  }
-  renderFrameCount++;
-
   if (mGlowEnabled && mBloom.sceneFbo) {
     glBindFramebuffer(GL_FRAMEBUFFER, mBloom.sceneFbo);
   } else {
@@ -567,6 +549,8 @@ void Renderer::render(int agentCount, float timeSeconds, const FrameStats& frame
     // Run culling compute, then draw the compacted visible-agent buffer indirectly.
     dispatchCull(agentCount, cam);
 
+    glUseProgram(prog);
+
     glUniform1i(glGetUniformLocation(prog, "uCullingEnabled"), 1);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, mVisibleAgentTypeSsbo);
 
@@ -611,15 +595,6 @@ void Renderer::render(int agentCount, float timeSeconds, const FrameStats& frame
     runBloomPasses();
     glPopDebugGroup();
   }
-
-  // ── Debug Overlay Text ───────────────────────────────────────────────────
-  // if (mDebug) {
-  //   glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 3, -1, "debug_overlay_text");
-  //   mDebug->drawOverlayText(frameStats, agentCount,
-  //                           static_cast<int>(mVizMode),
-  //                           static_cast<int>(cam.mode));
-  //   glPopDebugGroup();
-  // }
 }
 
 void Renderer::render(int agentCount) {
@@ -637,7 +612,7 @@ void Renderer::render(int agentCount) {
 // =============================================================================
 bool Renderer::createAgentTypeSsbo(std::string* outError) {
   (void)outError;
-  const GLsizeiptr bytes = 
+  const GLsizeiptr bytes =
       static_cast<GLsizeiptr>(mCfg.maxAgents) * sizeof(uint32_t);
   SWARM_GL_CALL(glCreateBuffers(1, &mAgentTypeSsbo));
   SWARM_GL_CALL(glNamedBufferData(mAgentTypeSsbo, bytes, nullptr, GL_DYNAMIC_DRAW));
@@ -755,19 +730,19 @@ void Renderer::runBloomPasses() {
   glUseProgram(mBloomBlurProgram);
   glUniform1i(glGetUniformLocation(mBloomBlurProgram, "uTex"), 0);
   glUniform1f(glGetUniformLocation(mBloomBlurProgram, "uRadius"), 1.2f); // tune spread
-  
+
   bool horizontal = true, first_iteration = true;
   const int amount = 10; // 5 passes each axis
-  
+
   for (int i = 0; i < amount; ++i) {
     glBindFramebuffer(GL_FRAMEBUFFER, mBloom.pingFbo[horizontal ? 1 : 0]);
     glUniform2f(glGetUniformLocation(mBloomBlurProgram, "uDir"),
                 horizontal ? 1.0f / hw : 0.0f,
                 horizontal ? 0.0f : 1.0f / hh);
-    
+
     glBindTextureUnit(0, first_iteration ? mBloom.brightTex : mBloom.pingTex[horizontal ? 0 : 1]);
     glDrawArrays(GL_TRIANGLES, 0, 3);
-    
+
     horizontal = !horizontal;
     if (first_iteration) first_iteration = false;
   }
@@ -785,4 +760,3 @@ void Renderer::runBloomPasses() {
 }
 
 } // namespace swarm
-
