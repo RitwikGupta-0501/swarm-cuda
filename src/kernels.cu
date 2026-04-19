@@ -189,10 +189,6 @@ __global__ void boidsKernel(
 
     if (renderPositions != nullptr) {
         renderPositions[i] = make_float4(self.x, self.y, self.vx, self.vy);
-        if (i < 3) {  // First 3 agents only
-            printf("GPU Agent[%d]: pos=(%.3f, %.3f) vel=(%.3f, %.3f)\n",
-                   i, self.x, self.y, self.vx, self.vy);
-        }
     }
 }
 
