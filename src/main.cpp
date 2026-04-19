@@ -143,6 +143,7 @@ int main()
     }
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_PROGRAM_POINT_SIZE);
 
     // ── Callbacks (must be set BEFORE ImGui init so ImGui can chain them) ──
     swarm::Renderer renderer;
@@ -279,6 +280,8 @@ int main()
         renderer.setShowTrails(renderOpts.trailLength > 0.0f);
 
         renderer.setShowVelocityVectors(renderOpts.showVelocity);
+
+        renderer.setAgentSize(renderOpts.agentSize);
 
         renderer.setShowGrid(renderOpts.showGrid);
 

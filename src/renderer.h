@@ -86,6 +86,8 @@ public:
   // count must be <= maxAgents.
   void uploadAgentTypes(const uint32_t* types, int count);
 
+  void setAgentSize(float size) { mAgentSize = size; }
+
   // Expose the type SSBO so the CUDA/CPU simulation can write directly.
   GLuint getAgentTypeSsbo() const { return mAgentTypeSsbo; }
 
@@ -112,6 +114,7 @@ private:
   GLuint mCameraUbo = 0;
 
   // ── Agent instanced geometry ──────────────────────────────────────────────
+  float mAgentSize = 2.0f;
   GLuint mAgentVao     = 0;
   GLuint mAgentBaseVbo = 0;
   GLuint mAgentVbo     = 0;   // position+velocity, shared with CUDA (16 bytes/agent)

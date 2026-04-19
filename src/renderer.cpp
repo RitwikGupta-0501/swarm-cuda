@@ -614,6 +614,8 @@ namespace swarm {
                     static_cast<int>(mVizMode));
         glUniform1f(glGetUniformLocation(prog, "uTime"), timeSeconds);
 
+        glUniform1f(glGetUniformLocation(prog, "uAgentSize"), mAgentSize);
+
         if (mFrustumCullingEnabled && mCullProgram && !usePoints) {
         // Run culling compute, then draw the compacted visible-agent buffer
         // indirectly.
