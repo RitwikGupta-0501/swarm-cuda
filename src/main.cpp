@@ -175,6 +175,13 @@ int main()
     initSimulation(agentCount, params);
     registerRenderBuffer(renderer.getAgentVbo());
 
+    std::vector<uint32_t> initialTypes(agentCount, 0);
+    int initialNumPreds = static_cast<int>(agentCount * params.predatorRatio);
+    for (int i = 0; i < initialNumPreds; ++i) {
+        initialTypes[i] = 1;
+    }
+    renderer.uploadAgentTypes(initialTypes.data(), agentCount);
+
     // ── Fullscreen toggle ─────────────────────────────────────────────────────
     bool isFullscreen = false;
     int  windowedX = 100, windowedY = 100, windowedW = 1280, windowedH = 800;
