@@ -264,6 +264,11 @@ void renderFullUI(SimParams&              params,
         ImGui::Text("Attractor / Repulsor");
         ImGui::Checkbox("Active", &params.attractorActive);
         if (params.attractorActive) {
+            ImGui::Checkbox("Bind to Cursor", &params.attractorBindToCursor);
+            ImGui::SameLine();
+            HelpMarker("Field will follow mouse. When OFF, use Ctrl + Left Click in viewport to teleport.");
+
+            ImGui::BeginDisabled(params.attractorBindToCursor);
             ImGui::DragFloat2("Position##att", &params.attractorX, 0.005f, -1.0f, 1.0f);
             ImGui::SliderFloat("Strength",     &params.attractorStrength, -5.0f, 5.0f);
             HelpMarker("Positive = attract, Negative = repel.");

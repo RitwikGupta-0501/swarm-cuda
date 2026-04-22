@@ -45,6 +45,8 @@ struct SimParams {
     float attractorY        = 0.0f;
     float attractorStrength = 1.0f;   // positive = attract, negative = repel
     float attractorRadius   = 0.3f;
+    bool attractorBindToCursor = false;
+    bool attractorTeleportRequested = false;
 
     int   agentCount        = 10000;
     bool  reinitRequested   = false;  // set when count changes
