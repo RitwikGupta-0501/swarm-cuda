@@ -235,12 +235,23 @@ int main()
 
         // ── Reinit if requested ───────────────────────────────────────────────
         if (params.reinitRequested) {
+            // 1. Tear down the simulation and unmap its CUDA resources
             shutdownSimulation();
             agentCount = params.agentCount;
 
+            // 2. Resize Renderer's OpenGL buffers (and its internal CUDA interop handle)
+            std::string err;
+            if (!renderer.resizeAgentBuffers(agentCount, &err)) {
+                std::cerr << "Failed to resize agent buffers: " << err << "\n";
+            }
+
+            // 3. Re-initialize simulation (allocates new CUDA arrays)
             initSimulation(agentCount, params);
+
+            // 4. Re-register the newly sized OpenGL VBO with the simulation
             registerRenderBuffer(renderer.getAgentVbo());
 
+            // 5. Restore metadata (agent types for rendering)
             std::vector<uint32_t> types(agentCount, 0);
             int numPreds = static_cast<int>(agentCount * params.predatorRatio);
             for (int i = 0; i < numPreds; ++i) {
@@ -255,13 +266,17 @@ int main()
         auto simStart = std::chrono::high_resolution_clock::now();
         if (!paused || stepOnce) {
             updateMovingObstacles(obstacles, 0.016f);
-            // Upload obstacle list to GPU before kernel launch
-            // (done inside stepSimulation via updated simulation.cu)
+
+            // FIX: Upload the updated obstacle list to the GPU before the kernel launch!
+            updateGPUObstacles(obstacles);
+
             stepSimulation(0.016f, mouseX, mouseY, params);
+
             getCounts(&stats.predatorCount, &stats.preyCount);
             stats.avgSpeed = getAverageSpeed();
             stepOnce = false;
         }
+
         auto simEnd = std::chrono::high_resolution_clock::now();
         stats.simTimeMs =
             std::chrono::duration<float, std::milli>(simEnd - simStart).count();

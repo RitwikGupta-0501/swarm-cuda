@@ -107,6 +107,64 @@ namespace swarm {
         return true;
     }
 
+    bool Renderer::resizeAgentBuffers(int newMaxAgents, std::string* outError) {
+        if (newMaxAgents <= 0) {
+            if (outError) *outError = "Invalid agent count for resize.";
+            return false;
+        }
+
+        // PHASE 2: Unregister CUDA interop before touching the OpenGL buffer memory
+    #if SWARM_ENABLE_CUDA
+        if (mInterop.cudaGraphicsResource) {
+            cudaUnregisterAgentBuffer(reinterpret_cast<cudaGraphicsResource*>(mInterop.cudaGraphicsResource));
+            mInterop.cudaGraphicsResource = nullptr;
+        }
+    #endif
+
+        // PHASE 1: Update config and calculate new sizes
+        mCfg.maxAgents = newMaxAgents;
+
+        const GLsizeiptr agentBytes = static_cast<GLsizeiptr>(newMaxAgents) * sizeof(RenderAgent);
+        const GLsizeiptr typeBytes  = static_cast<GLsizeiptr>(newMaxAgents) * sizeof(uint32_t);
+        const GLsizeiptr trailBytes = static_cast<GLsizeiptr>(newMaxAgents) * static_cast<GLsizeiptr>(mCfg.trailLength) * 2 * sizeof(float);
+
+        // PHASE 1: Re-allocate OpenGL buffers
+        // Calling glNamedBufferData on an existing buffer orphans the old data and allocates new memory.
+        // VAO bindings are preserved because the buffer IDs (mAgentVbo, etc.) do not change!
+
+        if (mAgentVbo) {
+            SWARM_GL_CALL(glNamedBufferData(mAgentVbo, agentBytes, nullptr, GL_DYNAMIC_DRAW));
+        }
+        if (mVisibleAgentSsbo) {
+            SWARM_GL_CALL(glNamedBufferData(mVisibleAgentSsbo, agentBytes, nullptr, GL_DYNAMIC_COPY));
+        }
+        if (mAgentTypeSsbo) {
+            SWARM_GL_CALL(glNamedBufferData(mAgentTypeSsbo, typeBytes, nullptr, GL_DYNAMIC_DRAW));
+        }
+        if (mVisibleAgentTypeSsbo) {
+            SWARM_GL_CALL(glNamedBufferData(mVisibleAgentTypeSsbo, typeBytes, nullptr, GL_DYNAMIC_COPY));
+        }
+        if (mVisibleAgentIdSsbo) {
+            SWARM_GL_CALL(glNamedBufferData(mVisibleAgentIdSsbo, typeBytes, nullptr, GL_DYNAMIC_COPY));
+        }
+        if (mTrailSsbo && mCfg.trailLength > 0) {
+            SWARM_GL_CALL(glNamedBufferData(mTrailSsbo, trailBytes, nullptr, GL_DYNAMIC_COPY));
+        }
+
+        // PHASE 2: Re-register the newly sized mAgentVbo with CUDA
+    #if SWARM_ENABLE_CUDA
+        if (mAgentVbo) {
+            cudaGraphicsResource* res = nullptr;
+            if (!cudaRegisterAgentBuffer(mAgentVbo, &res, outError)) {
+                return false;
+            }
+            mInterop.cudaGraphicsResource = res;
+        }
+    #endif
+
+        return true;
+    }
+
     void Renderer::resize(int viewportW, int viewportH) {
         mViewportW = viewportW;
         mViewportH = viewportH;

@@ -95,6 +95,8 @@ public:
   void render(int agent_count);
   void render(int agent_count, float timeSeconds, const FrameStats& frameStats);
 
+  bool resizeAgentBuffers(int newMaxAgents, std::string* outError = nullptr);
+
   GLuint getAgentVbo()        const { return mAgentVbo; }
   CudaInteropHandle getInteropHandle() const { return mInterop; }
 

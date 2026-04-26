@@ -14,6 +14,8 @@ void stepSimulation(float dt, float mouseX, float mouseY,
 void registerRenderBuffer(GLuint vbo);
 void unregisterRenderBuffer();
 
+void updateGPUObstacles(const std::vector<Obstacle>& obs);
+
 // Agent stats
 void getCounts(int* predators, int* prey);
 float getAverageSpeed();
