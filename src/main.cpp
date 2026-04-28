@@ -1,173 +1,512 @@
-#include "camera.h"
-#include "error.h"
-#include "renderer.h"
-#include "time_stats.h"
-#include "simulation.h"
+// ─── main.cpp — Swarm Simulation ─────────────────────────────────────────────
+// Implements:
+//   • Color schemes  (Uniform / Velocity Heat-map / Type / Rainbow)
+//   • Trail rendering (circular position buffer)
+//   • Grid overlay
+//   • Velocity-vector overlay
+//   • Add Prey / Add Predator / Convert Random
+//   • Obstacle GPU upload (real avoidance)
+//   • Screenshot (PNG via stb_image_write, header-only included below)
+//   • Recording  (sequential PNG frames → frames/ directory)
+//   • Export State / Load State (JSON)
+//   • Export Params (delegates to presets.cpp)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── stb_image_write (header-only, single-file) ────────────────────────────────
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include "ui.h"
+#include "simulation.h"
+#include "obstacles.h"
+
+#include <iostream>
+#include <fstream>
 #include <chrono>
+#include <vector>
 #include <string>
+#include <cstdio>
+#include <filesystem>
+#include "renderer.h"
 
-using namespace swarm;
+// ─── Globals ──────────────────────────────────────────────────────────────────
+SimParams            params;
+RenderOptions        renderOpts;
+SimStats             stats;
+std::vector<Obstacle> obstacles;
 
-namespace {
+bool paused              = false;
+bool stepOnce            = false;
+bool screenshotRequested = false;
+bool recordingActive     = false;
 
-struct AppCtx {
-  Renderer renderer;
-  TimeStats stats{120};
-  int agentCount = 1000;
-  float timeSeconds = 0.0f;
-  bool showMouseCapture = false;
-};
+// Flags written by ui.cpp, consumed here
+bool g_exportStateRequested = false;
+bool g_loadStateRequested   = false;
 
-void framebufferSizeCb(GLFWwindow* w, int width, int height) {
-  auto* ctx = static_cast<AppCtx*>(glfwGetWindowUserPointer(w));
-  if (!ctx) return;
-  ctx->renderer.resize(width, height);
-}
+// Path buffer (shared with ui.cpp via a simple extern trick;
+// we redeclare it here as the authoritative definition)
+static char g_savePathBuf[128] = "saves/state.json";
 
-void cursorPosCb(GLFWwindow* w, double x, double y) {
-  auto* ctx = static_cast<AppCtx*>(glfwGetWindowUserPointer(w));
-  if (!ctx) return;
-  ctx->renderer.camera().onMouseMove(x, y);
-}
+// ─── Forward declarations ────────────────────────────────────────────────────
+static void takeScreenshot(GLFWwindow* window, const char* path);
+static void exportState(const std::string& path);
+static bool loadState (const std::string& path);
 
-void mouseButtonCb(GLFWwindow* w, int button, int action, int mods) {
-  auto* ctx = static_cast<AppCtx*>(glfwGetWindowUserPointer(w));
-  if (!ctx) return;
-  ctx->renderer.camera().onMouseButton(button, action, mods);
-}
+// ─────────────────────────────────────────────────────────────────────────────
+//   SHADERS (Removed)
+// ─────────────────────────────────────────────────────────────────────────────
 
-void scrollCb(GLFWwindow* w, double /*xoff*/, double yoff) {
-  auto* ctx = static_cast<AppCtx*>(glfwGetWindowUserPointer(w));
-  if (!ctx) return;
-  double cx = 0.0, cy = 0.0;
-  glfwGetCursorPos(w, &cx, &cy);
-  ctx->renderer.camera().onScroll(yoff, cx, cy);
-}
-
-void keyCb(GLFWwindow* w, int key, int scancode, int action, int mods) {
-  auto* ctx = static_cast<AppCtx*>(glfwGetWindowUserPointer(w));
-  if (!ctx) return;
-
-  if (action == GLFW_PRESS) {
-    if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(w, GLFW_TRUE);
-    if (key == GLFW_KEY_TAB) {
-      const auto m = ctx->renderer.camera().mode();
-      ctx->renderer.setCameraMode(
-          m == CameraMode::Ortho2D ? CameraMode::Perspective25D : CameraMode::Ortho2D);
+// ─────────────────────────────────────────────────────────────────────────────
+//   COLOUR HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+static void hsvToRgb(float h, float s, float v, float& r, float& g, float& b)
+{
+    int   i = (int)(h * 6);
+    float f = h * 6 - i;
+    float p = v*(1-s), q = v*(1-f*s), t = v*(1-(1-f)*s);
+    switch (i%6) {
+        case 0: r=v; g=t; b=p; break;
+        case 1: r=q; g=v; b=p; break;
+        case 2: r=p; g=v; b=t; break;
+        case 3: r=p; g=q; b=v; break;
+        case 4: r=t; g=p; b=v; break;
+        default:r=v; g=p; b=q; break;
     }
-    if (key == GLFW_KEY_1) ctx->renderer.setVizMode(VizMode::Uniform);
-    if (key == GLFW_KEY_2) ctx->renderer.setVizMode(VizMode::VelocityHeat);
-    if (key == GLFW_KEY_3) ctx->renderer.setVizMode(VizMode::Direction);
-    if (key == GLFW_KEY_4) ctx->renderer.setVizMode(VizMode::RainbowTime);
-    if (key == GLFW_KEY_5) ctx->renderer.setVizMode(VizMode::TypeBased);
-
-    if (key == GLFW_KEY_G)
-      ctx->renderer.setGlowEnabled(!ctx->renderer.glowEnabled());
-
-    // Task 1.8: V  — toggle velocity-vector debug overlay
-    if (key == GLFW_KEY_V)
-      ctx->renderer.setShowVelocityVectors(!ctx->renderer.showVelocityVectors());
-
-    // Task 1.6: T  — toggle motion trails
-    if (key == GLFW_KEY_T)
-      ctx->renderer.setShowTrails(!ctx->renderer.showTrails());
-
-    // Task 1.7: C  — toggle GPU frustum culling
-    if (key == GLFW_KEY_C)
-      ctx->renderer.setFrustumCullingEnabled(!ctx->renderer.frustumCullingEnabled());
-  }
-
-  ctx->renderer.camera().onKey(key, scancode, action, mods);
 }
 
-} // namespace
+// ─────────────────────────────────────────────────────────────────────────────
+//   TRAIL SYSTEM (Removed)
+// ─────────────────────────────────────────────────────────────────────────────
 
-int main() {
-  installGlfwErrorCallback();
-  if (!glfwInit()) {
-    SWARM_FATAL("glfwInit failed");
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+//   CALLBACKS
+// ─────────────────────────────────────────────────────────────────────────────
+static void cursorPosCb(GLFWwindow* w, double x, double y) {
+    if (ImGui::GetIO().WantCaptureMouse) return;
+    auto* renderer = static_cast<swarm::Renderer*>(glfwGetWindowUserPointer(w));
+    if (renderer) renderer->camera().onMouseMove(x, y);
+}
 
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-#ifndef NDEBUG
-  glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-#endif
+static void mouseButtonCb(GLFWwindow* w, int button, int action, int mods) {
+    if (ImGui::GetIO().WantCaptureMouse) return;
+    auto* renderer = static_cast<swarm::Renderer*>(glfwGetWindowUserPointer(w));
+    if (renderer) renderer->camera().onMouseButton(button, action, mods);
+}
 
-  GLFWwindow* window = glfwCreateWindow(1280, 720, "Swarm Visualizer", nullptr, nullptr);
-  if (!window) SWARM_FATAL("glfwCreateWindow failed");
-  glfwMakeContextCurrent(window);
-  glfwSwapInterval(0); // uncapped for perf testing
+static void scrollCb(GLFWwindow* w, double /*xoff*/, double yoff) {
+    if (ImGui::GetIO().WantCaptureMouse) return;
+    auto* renderer = static_cast<swarm::Renderer*>(glfwGetWindowUserPointer(w));
+    if (renderer) {
+        double cx = 0.0, cy = 0.0;
+        glfwGetCursorPos(w, &cx, &cy);
+        renderer->camera().onScroll(yoff, cx, cy);
+    }
+}
 
-  if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
-    SWARM_FATAL("Failed to load OpenGL via GLAD");
-  }
+static void keyCb(GLFWwindow* w, int key, int scancode, int action, int mods) {
+    ImGuiIO& io = ImGui::GetIO();
+    auto* renderer = static_cast<swarm::Renderer*>(glfwGetWindowUserPointer(w));
+    if (!renderer) return;
 
-  // installGlDebugCallbackIfAvailable();
+    // Toggle camera mode on 'C' press
+    if (action == GLFW_PRESS && key == GLFW_KEY_C) {
+        const auto m = renderer->camera().mode();
+        renderer->setCameraMode(
+            m == swarm::CameraMode::Ortho2D ? swarm::CameraMode::Perspective25D : swarm::CameraMode::Ortho2D);
+    }
 
-  AppCtx ctx;
-  glfwSetWindowUserPointer(window, &ctx);
-  glfwSetFramebufferSizeCallback(window, framebufferSizeCb);
-  glfwSetCursorPosCallback(window, cursorPosCb);
-  glfwSetMouseButtonCallback(window, mouseButtonCb);
-  glfwSetScrollCallback(window, scrollCb);
-  glfwSetKeyCallback(window, keyCb);
+    if (io.WantCaptureKeyboard && io.WantTextInput) return;
+    renderer->camera().onKey(key, scancode, action, mods);
+}
 
-  int w = 1280, h = 720;
-  glfwGetFramebufferSize(window, &w, &h);
+// ─────────────────────────────────────────────────────────────────────────────
+//   MAIN
+// ─────────────────────────────────────────────────────────────────────────────
+int main()
+{
+    // ── GLFW init ─────────────────────────────────────────────────────────────
+    glfwInit();
+    GLFWwindow* window = glfwCreateWindow(1280, 800, "Swarm Simulation", NULL, NULL);
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(0);
 
-  RendererConfig cfg{};
-  cfg.maxAgents = 1000;
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cerr << "Failed to init GLAD\n"; return -1;
+    }
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_PROGRAM_POINT_SIZE);
 
-  std::string err;
-  if (!ctx.renderer.init(cfg, w, h, &err)) {
-    SWARM_FATAL(err.empty() ? "Renderer init failed" : err);
-  }
+    // ── Callbacks (must be set BEFORE ImGui init so ImGui can chain them) ──
+    swarm::Renderer renderer;
+    glfwSetWindowUserPointer(window, &renderer);
+    glfwSetCursorPosCallback(window, cursorPosCb);
+    glfwSetMouseButtonCallback(window, mouseButtonCb);
+    glfwSetScrollCallback(window, scrollCb);
+    glfwSetKeyCallback(window, keyCb);
 
-  initSimulation(cfg.maxAgents);
-  ctx.agentCount = getAgentCount();
-  ctx.renderer.uploadAgentTypes(getAgentTypesArray(), ctx.agentCount);
+    // ── ImGui ─────────────────────────────────────────────────────────────────
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
 
-  auto last = std::chrono::high_resolution_clock::now();
+    swarm::RendererConfig cfg{};
+    cfg.maxAgents = params.agentCount;
+    std::string err;
 
-  while (!glfwWindowShouldClose(window)) {
-    glfwPollEvents();
+    if (!renderer.init(cfg, 1280, 800, &err)) {
+        std::cerr << "Renderer init failed: " << err << "\n";
+        return -1;
+    }
+    renderer.setFrustumCullingEnabled(true);   // Enable culling
+    renderer.setCameraMode(swarm::CameraMode::Ortho2D);  // Default to 2D
 
-    const auto now = std::chrono::high_resolution_clock::now();
-    const double dt = std::chrono::duration<double>(now - last).count();
-    last = now;
+    int agentCount = params.agentCount;
 
-    float rawDt = static_cast<float>(dt);
-    float safeDt = std::clamp(rawDt, 0.001f, 0.033f);
-    ctx.timeSeconds += safeDt;
-    ctx.stats.push(safeDt);
+    // ── Init simulation ───────────────────────────────────────────────────────
+    initSimulation(agentCount, params);
+    registerRenderBuffer(renderer.getAgentVbo());
 
-    const FrameStats s = ctx.stats.stats();
+    std::vector<uint32_t> initialTypes(agentCount, 0);
+    int initialNumPreds = static_cast<int>(agentCount * params.predatorRatio);
+    for (int i = 0; i < initialNumPreds; ++i) {
+        initialTypes[i] = 1;
+    }
+    renderer.uploadAgentTypes(initialTypes.data(), agentCount);
 
-    double mx, my;
-    glfwGetCursorPos(window, &mx, &my);
-    int currentW, currentH;
-    glfwGetFramebufferSize(window, &currentW, &currentH);
-    float mouseX = (static_cast<float>(mx) / currentW) * 2.0f - 1.0f;
-    float mouseY = 1.0f - (static_cast<float>(my) / currentH) * 2.0f;
+    // ── Fullscreen toggle ─────────────────────────────────────────────────────
+    bool isFullscreen = false;
+    int  windowedX = 100, windowedY = 100, windowedW = 1280, windowedH = 800;
+    bool fPressedLastFrame = false;
 
-    void* interopRes = ctx.renderer.getInteropHandle().cudaGraphicsResource;
-    stepSimulation(safeDt, mouseX, mouseY, interopRes);
+    // ── Recording ─────────────────────────────────────────────────────────────
+    int  recordFrame = 0;
+    std::filesystem::create_directories("frames");
 
-    // Note: CUDA simulation should map/write/unmap the shared VBO here.
-    // This demo does not populate agents yet; renderer still runs and overlays work.
-    ctx.renderer.render(ctx.agentCount, ctx.timeSeconds, s);
+    // ─────────────────────────────────────────────────────────────────────────
+    //  MAIN LOOP
+    // ─────────────────────────────────────────────────────────────────────────
+    while (!glfwWindowShouldClose(window))
+    {
+        // ── ImGui new frame ───────────────────────────────────────────────────
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-    glfwSwapBuffers(window);
-  }
+        // ── Fullscreen toggle (F key) ─────────────────────────────────────────
+        bool fNow = glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS;
+        if (fNow && !fPressedLastFrame) {
+            isFullscreen = !isFullscreen;
+            if (isFullscreen) {
+                GLFWmonitor* mon = glfwGetPrimaryMonitor();
+                const GLFWvidmode* mode = glfwGetVideoMode(mon);
+                glfwGetWindowPos(window, &windowedX, &windowedY);
+                glfwGetWindowSize(window, &windowedW, &windowedH);
+                glfwSetWindowMonitor(window, mon, 0, 0,
+                    mode->width, mode->height, mode->refreshRate);
+            } else {
+                glfwSetWindowMonitor(window, nullptr,
+                    windowedX, windowedY, windowedW, windowedH, 0);
+            }
+        }
+        fPressedLastFrame = fNow;
 
-  glfwDestroyWindow(window);
-  glfwTerminate();
-  return 0;
+        // ── Window / mouse ────────────────────────────────────────────────────
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+        static int lastW = 0, lastH = 0;
+        if (width != lastW || height != lastH) {
+            renderer.resize(width, height);
+            lastW = width; lastH = height;
+        }
+        double mx, my;
+        glfwGetCursorPos(window, &mx, &my);
+        float mouseX = (float)(mx / width)  * 2.0f - 1.0f;
+        float mouseY = 1.0f - (float)(my / height) * 2.0f;
+
+        // ── Reinit if requested ───────────────────────────────────────────────
+        if (params.reinitRequested) {
+            // 1. Tear down the simulation and unmap its CUDA resources
+            shutdownSimulation();
+            agentCount = params.agentCount;
+
+            // 2. Resize Renderer's OpenGL buffers (and its internal CUDA interop handle)
+            std::string err;
+            if (!renderer.resizeAgentBuffers(agentCount, &err)) {
+                std::cerr << "Failed to resize agent buffers: " << err << "\n";
+            }
+
+            // 3. Re-initialize simulation (allocates new CUDA arrays)
+            initSimulation(agentCount, params);
+
+            // 4. Re-register the newly sized OpenGL VBO with the simulation
+            registerRenderBuffer(renderer.getAgentVbo());
+
+            // 5. Restore metadata (agent types for rendering)
+            std::vector<uint32_t> types(agentCount, 0);
+            int numPreds = static_cast<int>(agentCount * params.predatorRatio);
+            for (int i = 0; i < numPreds; ++i) {
+                types[i] = 1;
+            }
+            renderer.uploadAgentTypes(types.data(), agentCount);
+
+            params.reinitRequested = false;
+        }
+
+        // ── Step simulation ───────────────────────────────────────────────────
+        auto simStart = std::chrono::high_resolution_clock::now();
+        if (!paused || stepOnce) {
+            updateMovingObstacles(obstacles, 0.016f);
+
+            // FIX: Upload the updated obstacle list to the GPU before the kernel launch!
+            updateGPUObstacles(obstacles);
+
+            stepSimulation(0.016f, mouseX, mouseY, params);
+
+            getCounts(&stats.predatorCount, &stats.preyCount);
+            stats.avgSpeed = getAverageSpeed();
+            stepOnce = false;
+        }
+
+        auto simEnd = std::chrono::high_resolution_clock::now();
+        stats.simTimeMs =
+            std::chrono::duration<float, std::milli>(simEnd - simStart).count();
+
+        // ── Render simulation ──────────────────────────────────────────────────
+        int curCount = getAgentCount();
+
+        switch (renderOpts.colorScheme) {
+            case COLOR_UNIFORM:  renderer.setVizMode(swarm::VizMode::Uniform); break;
+            case COLOR_VELOCITY: renderer.setVizMode(swarm::VizMode::VelocityHeat); break;
+            case COLOR_TYPE:     renderer.setVizMode(swarm::VizMode::TypeBased); break;
+            case COLOR_RAINBOW:  renderer.setVizMode(swarm::VizMode::RainbowTime); break;
+        }
+
+        renderer.setTrailLength(static_cast<int>(renderOpts.trailLength));
+        renderer.setShowTrails(renderOpts.trailLength > 0.0f);
+
+        renderer.setShowVelocityVectors(renderOpts.showVelocity);
+
+        renderer.setAgentSize(renderOpts.agentSize);
+        renderer.camera().setFov(renderOpts.cameraFOV);
+
+        renderer.setShowGrid(renderOpts.showGrid);
+
+        renderer.render(curCount, static_cast<float>(glfwGetTime()), swarm::FrameStats{});
+
+        swarm::CameraMatrices camMats = renderer.camera().matrices(0.0f);
+        stats.cameraMode = static_cast<int>(camMats.mode);
+        stats.camX       = camMats.cameraPos.x;
+        stats.camY       = camMats.cameraPos.y;
+        stats.camZ       = camMats.cameraPos.z;
+        stats.camZoom    = camMats.zoom;
+
+        // ── ImGui UI ──────────────────────────────────────────────────────────
+        renderFullUI(params, renderOpts, stats, obstacles,
+                     paused, screenshotRequested, recordingActive);
+
+        // ── Export / Load State (flags set by ui.cpp) ────────────────────────
+        if (g_exportStateRequested) {
+            exportState(g_savePathBuf);
+            g_exportStateRequested = false;
+        }
+        if (g_loadStateRequested) {
+            loadState(g_savePathBuf);   // sets params.reinitRequested = true
+            g_loadStateRequested = false;
+        }
+
+        // ── Screenshot ────────────────────────────────────────────────────────
+        if (screenshotRequested) {
+            std::filesystem::create_directories("screenshots");
+            char path[128];
+            std::snprintf(path, sizeof(path),
+                          "screenshots/screenshot_%lld.png",
+                          (long long)time(nullptr));
+            takeScreenshot(window, path);
+            screenshotRequested = false;
+        }
+
+        // ── Recording ────────────────────────────────────────────────────────
+        if (recordingActive) {
+            char path[128];
+            std::snprintf(path, sizeof(path), "frames/frame_%06d.png", recordFrame++);
+            takeScreenshot(window, path);
+        }
+
+        // ── Render ImGui + swap ───────────────────────────────────────────────
+        auto renderStart = std::chrono::high_resolution_clock::now();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        auto renderEnd = std::chrono::high_resolution_clock::now();
+        stats.renderTimeMs =
+            std::chrono::duration<float, std::milli>(renderEnd - renderStart).count();
+
+        ImGuiIO& io = ImGui::GetIO();
+        stats.fps = io.Framerate;
+        stats.frameTimeMs = (io.Framerate > 0) ? 1000.0f / io.Framerate : 0.0f;
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+    shutdownSimulation();
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    glfwTerminate();
+    return 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//   SCREENSHOT
+// ─────────────────────────────────────────────────────────────────────────────
+static void takeScreenshot(GLFWwindow* window, const char* path)
+{
+    int w, h;
+    glfwGetFramebufferSize(window, &w, &h);
+    std::vector<unsigned char> pixels(w * h * 3);
+    glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+
+    // OpenGL origin is bottom-left; stb expects top-left → flip vertically
+    std::vector<unsigned char> flipped(w * h * 3);
+    for (int row = 0; row < h; row++) {
+        memcpy(flipped.data() + row * w * 3,
+               pixels.data() + (h - 1 - row) * w * 3,
+               w * 3);
+    }
+    stbi_write_png(path, w, h, 3, flipped.data(), w * 3);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//   EXPORT / LOAD STATE (JSON)
+// ─────────────────────────────────────────────────────────────────────────────
+static void exportState(const std::string& path)
+{
+    std::filesystem::create_directories("saves");
+    std::ofstream f(path);
+    if (!f.is_open()) return;
+
+    // SimParams
+    f << "{\n";
+    f << "  \"agentCount\": "        << params.agentCount        << ",\n";
+    f << "  \"separation\": "        << params.separation        << ",\n";
+    f << "  \"alignment\": "         << params.alignment         << ",\n";
+    f << "  \"cohesion\": "          << params.cohesion          << ",\n";
+    f << "  \"perceptionRadius\": "  << params.perceptionRadius  << ",\n";
+    f << "  \"maxSpeed\": "          << params.maxSpeed          << ",\n";
+    f << "  \"maxForce\": "          << params.maxForce          << ",\n";
+    f << "  \"speedFactor\": "       << params.speedFactor       << ",\n";
+    f << "  \"predatorRatio\": "     << params.predatorRatio     << ",\n";
+    f << "  \"predatorSpeedMul\": "  << params.predatorSpeedMul  << ",\n";
+    f << "  \"fearWeight\": "        << params.fearWeight        << ",\n";
+    f << "  \"windX\": "             << params.windX             << ",\n";
+    f << "  \"windY\": "             << params.windY             << ",\n";
+    f << "  \"attractorActive\": "   << (params.attractorActive ? 1 : 0) << ",\n";
+    f << "  \"attractorX\": "        << params.attractorX        << ",\n";
+    f << "  \"attractorY\": "        << params.attractorY        << ",\n";
+    f << "  \"attractorStrength\": " << params.attractorStrength << ",\n";
+    f << "  \"attractorRadius\": "   << params.attractorRadius   << ",\n";
+
+    // RenderOptions
+    f << "  \"colorScheme\": "  << (int)renderOpts.colorScheme  << ",\n";
+    f << "  \"agentSize\": "    << renderOpts.agentSize          << ",\n";
+    f << "  \"trailLength\": "  << renderOpts.trailLength        << ",\n";
+    f << "  \"cameraFOV\": "    << renderOpts.cameraFOV          << ",\n";
+    f << "  \"showGrid\": "     << (renderOpts.showGrid     ? 1 : 0) << ",\n";
+    f << "  \"showVelocity\": " << (renderOpts.showVelocity ? 1 : 0) << ",\n";
+
+    // Obstacles
+    f << "  \"obstacles\": [\n";
+    for (size_t i = 0; i < obstacles.size(); i++) {
+        const Obstacle& o = obstacles[i];
+        f << "    {\"type\":"    << (int)o.type
+          << ",\"x\":"         << o.x    << ",\"y\":"  << o.y
+          << ",\"x2\":"        << o.x2   << ",\"y2\":" << o.y2
+          << ",\"radius\":"    << o.radius
+          << ",\"moving\":"    << (o.isMoving ? 1 : 0)
+          << ",\"mvx\":"       << o.moveSpeedX
+          << ",\"mvy\":"       << o.moveSpeedY << "}";
+        if (i + 1 < obstacles.size()) f << ",";
+        f << "\n";
+    }
+    f << "  ]\n}\n";
+}
+
+static bool loadState(const std::string& path)
+{
+    std::ifstream f(path);
+    if (!f.is_open()) return false;
+
+    auto readFloat = [](const std::string& line, const char* key, float& out) {
+        std::string k = std::string("\"") + key + "\": ";
+        auto p = line.find(k);
+        if (p == std::string::npos) return false;
+        out = std::stof(line.substr(p + k.size())); return true;
+    };
+    auto readInt = [](const std::string& line, const char* key, int& out) {
+        std::string k = std::string("\"") + key + "\": ";
+        auto p = line.find(k);
+        if (p == std::string::npos) return false;
+        out = std::stoi(line.substr(p + k.size())); return true;
+    };
+
+    obstacles.clear();
+    bool inObs = false;
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.find("\"obstacles\"") != std::string::npos) { inObs = true; continue; }
+
+        if (!inObs) {
+            int iv = 0; float fv = 0;
+            readInt  (line, "agentCount",       params.agentCount);
+            readFloat(line, "separation",        params.separation);
+            readFloat(line, "alignment",         params.alignment);
+            readFloat(line, "cohesion",          params.cohesion);
+            readFloat(line, "perceptionRadius",  params.perceptionRadius);
+            readFloat(line, "maxSpeed",          params.maxSpeed);
+            readFloat(line, "maxForce",          params.maxForce);
+            readFloat(line, "speedFactor",       params.speedFactor);
+            readFloat(line, "predatorRatio",     params.predatorRatio);
+            readFloat(line, "predatorSpeedMul",  params.predatorSpeedMul);
+            readFloat(line, "fearWeight",        params.fearWeight);
+            readFloat(line, "windX",             params.windX);
+            readFloat(line, "windY",             params.windY);
+            if (readInt(line, "attractorActive", iv)) params.attractorActive = iv != 0;
+            readFloat(line, "attractorX",        params.attractorX);
+            readFloat(line, "attractorY",        params.attractorY);
+            readFloat(line, "attractorStrength", params.attractorStrength);
+            readFloat(line, "attractorRadius",   params.attractorRadius);
+            if (readInt(line, "colorScheme", iv))  renderOpts.colorScheme = (ColorScheme)iv;
+            readFloat(line, "agentSize",         renderOpts.agentSize);
+            readFloat(line, "trailLength",       renderOpts.trailLength);
+            readFloat(line, "cameraFOV",         renderOpts.cameraFOV);
+            if (readInt(line, "showGrid",     iv)) renderOpts.showGrid    = iv != 0;
+            if (readInt(line, "showVelocity", iv)) renderOpts.showVelocity= iv != 0;
+        } else {
+            // parse obstacle JSON objects on single lines
+            if (line.find('{') == std::string::npos) continue;
+            Obstacle o{};
+            int typeI=0, movI=0;
+            sscanf(line.c_str(),
+                "    {\"type\":%d,\"x\":%f,\"y\":%f,\"x2\":%f,\"y2\":%f,"
+                "\"radius\":%f,\"moving\":%d,\"mvx\":%f,\"mvy\":%f}",
+                &typeI, &o.x, &o.y, &o.x2, &o.y2,
+                &o.radius, &movI, &o.moveSpeedX, &o.moveSpeedY);
+            o.type = (ObstacleType)typeI;
+            o.isMoving = movI != 0;
+            obstacles.push_back(o);
+        }
+    }
+    params.reinitRequested = true;
+    return true;
 }

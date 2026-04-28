@@ -1,0 +1,70 @@
+{
+  "name": "Bird Flock",
+  "separation": 1.200000,
+  "alignment": 2.500000,
+  "cohesion": 1.000000,
+  "perceptionRadius": 0.200000,
+  "maxSpeed": 0.500000,
+  "maxForce": 0.100000,
+  "speedFactor": 1.000000,
+  "predatorRatio": 0.050000,
+  "predatorSpeedMul": 1.500000,
+  "fearWeight": 2.000000,
+  "agentCount": 10000
+}
+{
+  "name": "Fish School",
+  "separation": 1.500000,
+  "alignment": 1.500000,
+  "cohesion": 3.000000,
+  "perceptionRadius": 0.150000,
+  "maxSpeed": 0.400000,
+  "maxForce": 0.080000,
+  "speedFactor": 1.000000,
+  "predatorRatio": 0.050000,
+  "predatorSpeedMul": 1.500000,
+  "fearWeight": 3.000000,
+  "agentCount": 10000
+}
+{
+  "name": "Chaos",
+  "separation": 4.000000,
+  "alignment": 0.200000,
+  "cohesion": 0.200000,
+  "perceptionRadius": 0.250000,
+  "maxSpeed": 1.000000,
+  "maxForce": 0.150000,
+  "speedFactor": 1.500000,
+  "predatorRatio": 0.100000,
+  "predatorSpeedMul": 2.000000,
+  "fearWeight": 1.000000,
+  "agentCount": 10000
+}
+{
+  "name": "Orbiting",
+  "separation": 0.500000,
+  "alignment": 4.000000,
+  "cohesion": 4.000000,
+  "perceptionRadius": 0.300000,
+  "maxSpeed": 0.350000,
+  "maxForce": 0.050000,
+  "speedFactor": 0.800000,
+  "predatorRatio": 0.000000,
+  "predatorSpeedMul": 1.500000,
+  "fearWeight": 1.000000,
+  "agentCount": 10000
+}
+{
+  "name": "Murmuration",
+  "separation": 1.800000,
+  "alignment": 3.500000,
+  "cohesion": 1.200000,
+  "perceptionRadius": 0.220000,
+  "maxSpeed": 0.550000,
+  "maxForce": 0.120000,
+  "speedFactor": 1.200000,
+  "predatorRatio": 0.030000,
+  "predatorSpeedMul": 1.800000,
+  "fearWeight": 2.500000,
+  "agentCount": 15000
+}

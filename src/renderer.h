@@ -69,6 +69,7 @@ public:
 
   void setShowTrails(bool v) { mShowTrails = v; }
   bool showTrails()   const  { return mShowTrails; }
+  void setTrailLength(int length) { mCfg.trailLength = length; }
 
   void setFrustumCullingEnabled(bool v) { mFrustumCullingEnabled = v; }
   bool frustumCullingEnabled()   const  { return mFrustumCullingEnabled; }
@@ -76,11 +77,16 @@ public:
   void setGlowEnabled(bool v) { mGlowEnabled = v; }
   bool glowEnabled()   const  { return mGlowEnabled; }
 
+  void setShowGrid(bool show) { mShowGrid = show; }
+  bool showGrid() const { return mShowGrid; }
+
   // ── Agent type API ────────────────────────────────────────────────────────
   // Upload an array of per-agent types (0=prey, 1=predator) to the GPU.
   // Call once after simulation sets up agent roles.
   // count must be <= maxAgents.
   void uploadAgentTypes(const uint32_t* types, int count);
+
+  void setAgentSize(float size) { mAgentSize = size; }
 
   // Expose the type SSBO so the CUDA/CPU simulation can write directly.
   GLuint getAgentTypeSsbo() const { return mAgentTypeSsbo; }
@@ -88,6 +94,8 @@ public:
   // ── Main render API ───────────────────────────────────────────────────────
   void render(int agent_count);
   void render(int agent_count, float timeSeconds, const FrameStats& frameStats);
+
+  bool resizeAgentBuffers(int newMaxAgents, std::string* outError = nullptr);
 
   GLuint getAgentVbo()        const { return mAgentVbo; }
   CudaInteropHandle getInteropHandle() const { return mInterop; }
@@ -102,11 +110,13 @@ private:
   bool mShowTrails            = false;
   bool mFrustumCullingEnabled = true;
   bool mGlowEnabled           = false;
+  bool mShowGrid = false;
 
   // ── Core camera UBO ───────────────────────────────────────────────────────
   GLuint mCameraUbo = 0;
 
   // ── Agent instanced geometry ──────────────────────────────────────────────
+  float mAgentSize = 2.0f;
   GLuint mAgentVao     = 0;
   GLuint mAgentBaseVbo = 0;
   GLuint mAgentVbo     = 0;   // position+velocity, shared with CUDA (16 bytes/agent)

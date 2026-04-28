@@ -29,7 +29,7 @@ __device__ inline void queryNeighbors(
         for (int dy = -1; dy <= 1; dy++) {
             int cell = hashCell(cx + dx, cy + dy, table_size);
             int start = cell_start[cell];
-            if (!__any_sync(0xFFFFFFFF, start != -1)) continue;
+            if (start == -1) continue;
             int end = cell_end[cell];
 
             for (int j = start; j < end; j++) {
@@ -47,7 +47,7 @@ __device__ inline void queryNeighbors(
                     *cohY += agents[nid].y;
                     (*neighbors)++;
                 }
-                if (dist < 0.02f && dist > 0.0f) {
+                if (dist < radius * 0.5f && dist > 0.0f) {
                     *sepX -= ddx / dist;
                     *sepY -= ddy / dist;
                 }

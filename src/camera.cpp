@@ -56,10 +56,13 @@ void Camera::onMouseMove(double x, double y) {
   mLastMouseY = y;
 
   if (mMode == CameraMode::Ortho2D) {
-    // Drag pans opposite to mouse motion.
-    const float scale = 1.0f / std::max(0.0001f, m2d.targetZoom);
-    m2d.targetPosition += glm::vec2(static_cast<float>(-dx), static_cast<float>(dy)) * scale;
-  } else {
+      // Calculate how many world units 1 pixel represents
+      // worldHeight is 2.0 / zoom. Divide by screen height (mH) to get units per pixel.
+      const float unitsPerPixel = 2.0f / (static_cast<float>(mH) * std::max(0.0001f, m2d.targetZoom));
+
+      // Multiply the pixel movement by unitsPerPixel to get smooth, 1-to-1 dragging
+      m2d.targetPosition += glm::vec2(static_cast<float>(-dx), static_cast<float>(dy)) * unitsPerPixel;
+    } else {
     // Orbit.
     m25d.targetYaw += static_cast<float>(dx) * 0.006f;
     m25d.targetPitch += static_cast<float>(dy) * 0.006f;
@@ -88,14 +91,12 @@ glm::vec2 Camera::screenToWorld2D(double sx, double sy) const {
 }
 
 void Camera::onScroll(double yOffset, double cursorX, double cursorY) {
-  if (mMode == CameraMode::Ortho2D) {
-    const glm::vec2 worldBefore = screenToWorld2D(cursorX, cursorY);
-    const float zoomFactor = std::pow(1.1f, static_cast<float>(yOffset));
-    m2d.targetZoom = std::clamp(m2d.targetZoom * zoomFactor, 0.05f, 200.0f);
-    const glm::vec2 worldAfter = screenToWorld2D(cursorX, cursorY);
-    // Keep the point under cursor fixed by shifting camera target position.
-    m2d.targetPosition += (worldBefore - worldAfter);
-  } else {
+    if (mMode == CameraMode::Ortho2D) {
+        const glm::vec2 worldBefore = screenToWorld2D(cursorX, cursorY);
+        const float zoomFactor = std::pow(1.1f, static_cast<float>(yOffset));
+        m2d.targetZoom = std::clamp(m2d.targetZoom * zoomFactor, 0.1f, 10.0f);
+        const glm::vec2 worldAfter = screenToWorld2D(cursorX, cursorY);
+    } else {
     const float zoomFactor = std::pow(1.1f, static_cast<float>(-yOffset));
     m25d.targetDistance = std::clamp(m25d.targetDistance * zoomFactor, 2.0f, 2000.0f);
   }
@@ -115,7 +116,7 @@ void Camera::onKey(int key, int /*scancode*/, int action, int /*mods*/) {
 }
 
 void Camera::update(float dt) {
-  const float moveSpeed = 800.0f; // pixels/sec at zoom=1 (2D).
+  const float moveSpeed = 2.0f; // pixels/sec at zoom=1 (2D).
 
   if (mMode == CameraMode::Ortho2D) {
     glm::vec2 dir(0.0f);
@@ -155,9 +156,11 @@ CameraMatrices Camera::matrices(float timeSeconds) const {
   if (mMode == CameraMode::Ortho2D) {
     const float w = static_cast<float>(mW);
     const float h = static_cast<float>(mH);
-    const float invZ = 1.0f / std::max(0.0001f, m2d.zoom);
-    const float halfW = 0.5f * w * invZ;
-    const float halfH = 0.5f * h * invZ;
+    const float aspect = w / h;
+    const float worldHeight = 2.0f / std::max(0.0001f, m2d.zoom);  // zoom 1.0 = 2 unit height
+    const float worldWidth = worldHeight * aspect;
+    const float halfW = 0.5f * worldWidth;
+    const float halfH = 0.5f * worldHeight;
 
     m.proj = glm::ortho(-halfW, halfW, -halfH, halfH, -1.0f, 1.0f);
 
@@ -171,7 +174,7 @@ CameraMatrices Camera::matrices(float timeSeconds) const {
     (void)timeSeconds;
   } else {
     const float aspect = static_cast<float>(mW) / static_cast<float>(mH);
-    m.proj = glm::perspective(glm::radians(55.0f), aspect, 0.1f, 5000.0f);
+    m.proj = glm::perspective(glm::radians(mFov), aspect, 0.1f, 5000.0f);
 
     const float cy = std::cos(m25d.yaw);
     const float sy = std::sin(m25d.yaw);
@@ -190,4 +193,3 @@ CameraMatrices Camera::matrices(float timeSeconds) const {
 }
 
 } // namespace swarm
-

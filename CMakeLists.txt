@@ -1,104 +1,79 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.18)
+project(SwarmSim LANGUAGES C CXX CUDA)
 
-project(SwarmVisualizer LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES all)
+if (MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>)
 endif()
 
-option(SWARM_ENABLE_CUDA "Enable CUDA-OpenGL interop module" ON)
-option(SWARM_RUNTIME_VALIDATION "Enable runtime validation checks (debug-oriented)." OFF)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_ARCHITECTURES 86) # Adjust for your GPU
 
-find_package(glfw3 CONFIG REQUIRED)
-find_package(glm CONFIG REQUIRED)
-find_package(glad CONFIG REQUIRED)
+# Find OpenGL
+find_package(OpenGL REQUIRED)
 
-if(SWARM_ENABLE_CUDA)
-  include(CheckLanguage)
-  check_language(CUDA)
-  if(CMAKE_CUDA_COMPILER)
-    enable_language(CUDA)
-    find_package(CUDAToolkit REQUIRED)
-  else()
-    message(WARNING "CUDA compiler not found. Falling back to non-CUDA build.")
-    set(SWARM_ENABLE_CUDA OFF CACHE BOOL "" FORCE)
-  endif()
-endif()
+# GLFW
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory(external/glfw)
 
-add_executable(swarm_visualizer
-  src/main.cpp
-  src/renderer.cpp
-  src/camera.cpp
-  src/gl_shader.cpp
-  src/gl_buffer.cpp
-  src/debug_draw.cpp
-  src/error.cpp
-  src/time_stats.cpp
+# GLM (header-only)
+include_directories(external/glm)
+
+# GLAD
+add_library(glad external/glad/src/glad.c)
+target_include_directories(glad PUBLIC external/glad/include)
+
+# ImGui
+set(IMGUI_DIR external/imgui)
+add_library(imgui
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
+target_include_directories(imgui PUBLIC
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    external/glfw/include
 )
 
-target_include_directories(swarm_visualizer PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_link_libraries(swarm_visualizer PRIVATE
-  glfw
-  glad::glad
-  glm::glm
-)
-
-target_compile_definitions(swarm_visualizer PRIVATE
-  GLFW_INCLUDE_NONE
-)
-
-if(SWARM_RUNTIME_VALIDATION)
-  target_compile_definitions(swarm_visualizer PRIVATE
-    $<$<CONFIG:Debug>:SWARM_RUNTIME_VALIDATION=1>
-    $<$<NOT:$<CONFIG:Debug>>:SWARM_RUNTIME_VALIDATION=0>
-  )
-else()
-  target_compile_definitions(swarm_visualizer PRIVATE
-    SWARM_RUNTIME_VALIDATION=0
-  )
-endif()
-
-if(MSVC)
-  target_compile_options(swarm_visualizer PRIVATE /W4 /permissive-)
-else()
-  target_compile_options(swarm_visualizer PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-
-if(SWARM_ENABLE_CUDA)
-  target_sources(swarm_visualizer PRIVATE
-    src/interop_cuda_gl.cu
+# Main executable
+add_executable(swarm-sim
+    src/main.cpp
     src/simulation.cu
     src/kernels.cu
+    src/gl_shader.cpp
+    src/debug_draw.cpp
+    src/error.cpp
+    src/gl_buffer.cpp
+    src/interop_cuda_gl.cu
     src/spatial_hash.cu
-  )
+    src/ui.cpp
+    src/presets.cpp
+    src/obstacles.cpp     
+    src/scenarios.cpp 
+    src/renderer.cpp
+    src/camera.cpp
+    src/time_stats.cpp
+)
 
-  set_target_properties(swarm_visualizer PROPERTIES
-    CUDA_SEPARABLE_COMPILATION ON
-  )
+target_link_libraries(swarm-sim
+    glfw
+    glad
+    imgui
+    OpenGL::GL
+)
 
-  target_link_libraries(swarm_visualizer PRIVATE
-    CUDA::cudart
-  )
-
-  target_compile_definitions(swarm_visualizer PRIVATE
-    SWARM_ENABLE_CUDA=1
-  )
-else()
-  target_compile_definitions(swarm_visualizer PRIVATE
-    SWARM_ENABLE_CUDA=0
-  )
-endif()
-
-# Ensure shaders are always available next to the executable
-add_custom_command(TARGET swarm_visualizer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-    "$<TARGET_FILE_DIR:swarm_visualizer>/shaders"
-    COMMENT "Copying shaders to build directory..."
+target_include_directories(swarm-sim PRIVATE
+    src
+    external/glad/include
+    external/glfw/include
+    external/imgui
+    external/imgui/backends
+    external/glm
 )
