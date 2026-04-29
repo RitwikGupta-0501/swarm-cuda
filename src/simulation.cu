@@ -134,7 +134,30 @@ void stepSimulation(float dt, float mouseX, float mouseY,
             &mappedSize, renderResource);
     }
 
-    buildSpatialHash(sh, d_agents, agentCountGlobal, params.perceptionRadius);
+
+    // --- 1. Create and record the start event ---
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+        cudaEventRecord(start);
+
+        // --- The function you want to time ---
+        buildSpatialHash(sh, d_agents, agentCountGlobal, params.perceptionRadius);
+
+        // --- 2. Record the stop event and wait for it to finish ---
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+
+        // --- 3. Calculate the elapsed time ---
+        float spatialHashTimeMs = 0;
+        cudaEventElapsedTime(&spatialHashTimeMs, start, stop);
+
+        // (Optional) Print it to the console to quickly test:
+        // printf("Spatial Hash Rebuild Time: %f ms\n", spatialHashTimeMs);
+
+        // --- 4. Destroy the events to prevent memory leaks ---
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
 
     launchBoidsKernel(
         d_agents, agentCountGlobal, dt, mouseX, mouseY,

@@ -8,7 +8,7 @@ endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_CUDA_ARCHITECTURES 86) # Adjust for your GPU
+set(CMAKE_CUDA_ARCHITECTURES 50) # Adjust for your GPU
 
 # Find OpenGL
 find_package(OpenGL REQUIRED)
@@ -55,8 +55,8 @@ add_executable(swarm-sim
     src/spatial_hash.cu
     src/ui.cpp
     src/presets.cpp
-    src/obstacles.cpp     
-    src/scenarios.cpp 
+    src/obstacles.cpp
+    src/scenarios.cpp
     src/renderer.cpp
     src/camera.cpp
     src/time_stats.cpp

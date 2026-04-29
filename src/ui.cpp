@@ -16,6 +16,7 @@ extern bool stepOnce;
 // (Cleaner than circular includes.)
 extern bool g_exportStateRequested;
 extern bool g_loadStateRequested;
+extern char g_savePathBuf[128];
 
 // ─── Simple original UI ───────────────────────────────────────────────────────
 void renderUI(bool& paused, float& speed,
@@ -300,9 +301,8 @@ void renderFullUI(SimParams&              params,
         ImGui::Separator();
 
         // Export / Load State (full JSON including render options + obstacles)
-        static char savePathBuf[128] = "saves/state.json";
         ImGui::SetNextItemWidth(200);
-        ImGui::InputText("##savepath", savePathBuf, sizeof(savePathBuf));
+        ImGui::InputText("##savepath", g_savePathBuf, sizeof(g_savePathBuf));
         ImGui::SameLine();
         if (ImGui::Button("Export State")) {
             g_exportStateRequested = true;   // main.cpp reads this flag
