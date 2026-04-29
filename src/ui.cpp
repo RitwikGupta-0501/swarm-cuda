@@ -273,6 +273,8 @@ void renderFullUI(SimParams&              params,
             ImGui::SliderFloat("Strength",     &params.attractorStrength, -5.0f, 5.0f);
             HelpMarker("Positive = attract, Negative = repel.");
             ImGui::SliderFloat("Radius##att",  &params.attractorRadius, 0.05f, 1.0f);
+
+            ImGui::EndDisabled();
         }
     }
 
