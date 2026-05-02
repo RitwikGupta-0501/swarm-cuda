@@ -93,6 +93,8 @@ void renderFullUI(SimParams&              params,
         ImGui::Text("FPS         %6.1f",  stats.fps);
         ImGui::Text("Frame       %5.2f ms", stats.frameTimeMs);
         ImGui::Text("Sim         %5.2f ms", stats.simTimeMs);
+        ImGui::Text("  ├ Hash    %5.2f ms", stats.spatialHashTimeMs);
+        ImGui::Text("  └ Kernel  %5.2f ms", stats.physicsKernelTimeMs);
         ImGui::Text("Render      %5.2f ms", stats.renderTimeMs);
         ImGui::Separator();
         ImGui::Text("Prey        %d", stats.preyCount);

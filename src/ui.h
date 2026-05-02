@@ -70,6 +70,8 @@ struct SimStats {
     float frameTimeMs   = 0.0f;
     float simTimeMs     = 0.0f;
     float renderTimeMs  = 0.0f;
+    float spatialHashTimeMs = 0.0f;
+    float physicsKernelTimeMs = 0.0f;
     float avgSpeed      = 0.0f;
     int   predatorCount = 0;
     int   preyCount     = 0;

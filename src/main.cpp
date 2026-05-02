@@ -271,6 +271,7 @@ int main()
             updateGPUObstacles(obstacles);
 
             stepSimulation(0.016f, mouseX, mouseY, params);
+            getKernelProfileTimes(stats.spatialHashTimeMs, stats.physicsKernelTimeMs);
 
             getCounts(&stats.predatorCount, &stats.preyCount);
             stats.avgSpeed = getAverageSpeed();
