@@ -16,6 +16,7 @@ extern bool stepOnce;
 // (Cleaner than circular includes.)
 extern bool g_exportStateRequested;
 extern bool g_loadStateRequested;
+extern char g_savePathBuf[128];
 
 // ─── Simple original UI ───────────────────────────────────────────────────────
 void renderUI(bool& paused, float& speed,
@@ -92,6 +93,8 @@ void renderFullUI(SimParams&              params,
         ImGui::Text("FPS         %6.1f",  stats.fps);
         ImGui::Text("Frame       %5.2f ms", stats.frameTimeMs);
         ImGui::Text("Sim         %5.2f ms", stats.simTimeMs);
+        ImGui::Text("  ├ Hash    %5.2f ms", stats.spatialHashTimeMs);
+        ImGui::Text("  └ Kernel  %5.2f ms", stats.physicsKernelTimeMs);
         ImGui::Text("Render      %5.2f ms", stats.renderTimeMs);
         ImGui::Separator();
         ImGui::Text("Prey        %d", stats.preyCount);
@@ -273,6 +276,8 @@ void renderFullUI(SimParams&              params,
             ImGui::SliderFloat("Strength",     &params.attractorStrength, -5.0f, 5.0f);
             HelpMarker("Positive = attract, Negative = repel.");
             ImGui::SliderFloat("Radius##att",  &params.attractorRadius, 0.05f, 1.0f);
+
+            ImGui::EndDisabled();
         }
     }
 
@@ -298,9 +303,8 @@ void renderFullUI(SimParams&              params,
         ImGui::Separator();
 
         // Export / Load State (full JSON including render options + obstacles)
-        static char savePathBuf[128] = "saves/state.json";
         ImGui::SetNextItemWidth(200);
-        ImGui::InputText("##savepath", savePathBuf, sizeof(savePathBuf));
+        ImGui::InputText("##savepath", g_savePathBuf, sizeof(g_savePathBuf));
         ImGui::SameLine();
         if (ImGui::Button("Export State")) {
             g_exportStateRequested = true;   // main.cpp reads this flag

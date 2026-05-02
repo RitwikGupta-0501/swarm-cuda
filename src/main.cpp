@@ -53,7 +53,7 @@ bool g_loadStateRequested   = false;
 
 // Path buffer (shared with ui.cpp via a simple extern trick;
 // we redeclare it here as the authoritative definition)
-static char g_savePathBuf[128] = "saves/state.json";
+char g_savePathBuf[128] = "saves/state.json";
 
 // ─── Forward declarations ────────────────────────────────────────────────────
 static void takeScreenshot(GLFWwindow* window, const char* path);
@@ -271,6 +271,7 @@ int main()
             updateGPUObstacles(obstacles);
 
             stepSimulation(0.016f, mouseX, mouseY, params);
+            getKernelProfileTimes(stats.spatialHashTimeMs, stats.physicsKernelTimeMs);
 
             getCounts(&stats.predatorCount, &stats.preyCount);
             stats.avgSpeed = getAverageSpeed();

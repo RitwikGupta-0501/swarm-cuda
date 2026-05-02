@@ -15,6 +15,14 @@ static int    agentCountGlobal = 0;
 static cudaGraphicsResource* renderResource = nullptr;
 static SpatialHash sh;
 
+static float g_hashTimeMs = 0.0f;
+static float g_kernelTimeMs = 0.0f;
+
+void getKernelProfileTimes(float& hashTimeMs, float& kernelTimeMs) {
+    hashTimeMs = g_hashTimeMs;
+    kernelTimeMs = g_kernelTimeMs;
+}
+
 // ─── GPU obstacle buffer ──────────────────────────────────────────────────────
 // Mirrors the CPU Obstacle list each frame so the kernel can use it.
 // We use a plain struct that is CUDA-friendly (no vtable, no std::).
@@ -134,7 +142,25 @@ void stepSimulation(float dt, float mouseX, float mouseY,
             &mappedSize, renderResource);
     }
 
-    buildSpatialHash(sh, d_agents, agentCountGlobal, params.perceptionRadius);
+
+    // --- 1. Create and record the start event ---
+        cudaEvent_t start, stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+        cudaEventRecord(start);
+
+        // --- The function you want to time ---
+        buildSpatialHash(sh, d_agents, agentCountGlobal, params.perceptionRadius);
+
+        // --- 2. Record the stop event and wait for it to finish ---
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+
+        // --- 3. Calculate the elapsed time ---
+        cudaEventElapsedTime(&g_hashTimeMs, start, stop);
+
+        // Record start for Boids kernel
+        cudaEventRecord(start);
 
     launchBoidsKernel(
         d_agents, agentCountGlobal, dt, mouseX, mouseY,
@@ -150,6 +176,15 @@ void stepSimulation(float dt, float mouseX, float mouseY,
         params.speedFactor,
         d_obstacles, d_obstaclesN
     );
+
+    // Record stop for Boids kernel
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&g_kernelTimeMs, start, stop);
+
+    // --- 4. Destroy the events to prevent memory leaks ---
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 
     cudaDeviceSynchronize();
 
