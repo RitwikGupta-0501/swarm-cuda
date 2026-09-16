@@ -2,6 +2,19 @@
 #include <cuda_runtime.h>
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
+#include <cstdio>
+
+#include <stdexcept>
+
+#define CUDA_CHECK(call)                                                      \
+    do {                                                                      \
+        cudaError_t err = (call);                                             \
+        if (err != cudaSuccess) {                                             \
+            fprintf(stderr, "CUDA error at %s:%d - %s\n",                     \
+                    __FILE__, __LINE__, cudaGetErrorString(err));             \
+            throw std::runtime_error(cudaGetErrorString(err));                \
+        }                                                                     \
+    } while (0)
 
 __global__ void assignCellsKernel(Agent* agents, int* agent_cells,
                                    int* agent_ids, int n, float cell_size,
@@ -27,19 +40,28 @@ __global__ void findBoundariesKernel(int* sorted_cells, int* cell_start,
         cell_end[cell] = i + 1;
 }
 
+__global__ void reorderAgentsKernel(Agent* agents, Agent* sorted_agents_data, int* sorted_agents, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    sorted_agents_data[i] = agents[sorted_agents[i]];
+}
+
 void initSpatialHash(SpatialHash& sh, int max_agents) {
     sh.table_size = max_agents * 2;  // ~2x agent count
-    cudaMalloc(&sh.agent_cells,   max_agents * sizeof(int));
-    cudaMalloc(&sh.sorted_agents, max_agents * sizeof(int));
-    cudaMalloc(&sh.cell_start,    sh.table_size * sizeof(int));
-    cudaMalloc(&sh.cell_end,      sh.table_size * sizeof(int));
+    if (sh.table_size < 1024) sh.table_size = 1024;
+    CUDA_CHECK(cudaMalloc(&sh.agent_cells,   max_agents * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&sh.sorted_agents, max_agents * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&sh.cell_start,    sh.table_size * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&sh.cell_end,      sh.table_size * sizeof(int)));
+    CUDA_CHECK(cudaMalloc(&sh.sorted_agents_data, max_agents * sizeof(Agent)));
 }
 
 void destroySpatialHash(SpatialHash& sh) {
-    cudaFree(sh.agent_cells);
-    cudaFree(sh.sorted_agents);
-    cudaFree(sh.cell_start);
-    cudaFree(sh.cell_end);
+    CUDA_CHECK(cudaFree(sh.agent_cells));
+    CUDA_CHECK(cudaFree(sh.sorted_agents));
+    CUDA_CHECK(cudaFree(sh.cell_start));
+    CUDA_CHECK(cudaFree(sh.cell_end));
+    CUDA_CHECK(cudaFree(sh.sorted_agents_data));
 }
 
 void buildSpatialHash(SpatialHash& sh, Agent* d_agents, int count, float cell_size) {
@@ -60,10 +82,13 @@ void buildSpatialHash(SpatialHash& sh, Agent* d_agents, int count, float cell_si
     thrust::sort_by_key(keys, keys + count, vals);
 
     // Step 3: reset cell_start sentinels
-    cudaMemset(sh.cell_start, -1, sh.table_size * sizeof(int));
-    cudaMemset(sh.cell_end,    0, sh.table_size * sizeof(int));
+    CUDA_CHECK(cudaMemset(sh.cell_start, -1, sh.table_size * sizeof(int)));
+    CUDA_CHECK(cudaMemset(sh.cell_end,    0, sh.table_size * sizeof(int)));
 
     // Step 4: find boundaries
     findBoundariesKernel<<<grid, block>>>(sh.agent_cells, sh.cell_start,
                                           sh.cell_end, count);
+
+    // Step 5: reorder actual agent data
+    reorderAgentsKernel<<<grid, block>>>(d_agents, sh.sorted_agents_data, sh.sorted_agents, count);
 }

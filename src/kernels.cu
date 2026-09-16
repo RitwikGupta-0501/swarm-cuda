@@ -5,6 +5,12 @@
 #include <math.h>
 #include <cmath>
 
+__constant__ SimConfig d_config;
+
+void uploadSimConfig(const SimConfig& config) {
+    cudaMemcpyToSymbol(d_config, &config, sizeof(SimConfig));
+}
+
 // ─── GPU obstacle avoidance (device) ─────────────────────────────────────────
 __device__ void gpuObstacleAvoidance(
     float px, float py, float vx, float vy,
@@ -13,9 +19,9 @@ __device__ void gpuObstacleAvoidance(
 {
     if (nObs == 0 || obs == nullptr) return;
 
-    const float LOOK_AHEAD  = 0.15f;
-    const float SAFETY_DIST = 0.08f;
-    const float AVOID_W     = 3.0f;
+    const float LOOK_AHEAD  = d_config.lookAhead;
+    const float SAFETY_DIST = d_config.safetyDist;
+    const float AVOID_W     = d_config.avoidWeight;
 
     float speed = sqrtf(vx*vx + vy*vy);
     float nx = (speed > 0.0001f) ? vx/speed : 0.0f;
@@ -66,21 +72,11 @@ __device__ void gpuObstacleAvoidance(
     }
 }
 
-// ─── Main boids kernel ────────────────────────────────────────────────────────
 __global__ void boidsKernel(
     Agent* agents, int count, float dt, float mouseX, float mouseY,
-    int* cellStart, int* cellEnd, int* particleIndex,
+    int* cellStart, int* cellEnd, int* particleIndex, const Agent* sorted_agents_data,
     int tableSize, float cellSize,
     float4* renderPositions,
-
-    float separation, float alignment, float cohesion,
-    float perceptionRadius, float maxSpeed, float maxForce,
-    float predatorRatio, float predatorSpeedMul, float fearWeight,
-    float windX, float windY,
-    bool attractorActive,
-    float attractorX, float attractorY,
-    float attractorStrength, float attractorRadius,
-    float speedFactor,
     GPUObstacle* d_obstacles, int obstacleCount
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -96,8 +92,8 @@ __global__ void boidsKernel(
 
     queryNeighbors(
         i, self.x, self.y, cellSize,
-        agents, particleIndex, cellStart, cellEnd,
-        tableSize, perceptionRadius,
+        sorted_agents_data, particleIndex, cellStart, cellEnd,
+        tableSize, d_config.perceptionRadius,
         &sepX, &sepY, &aliX, &aliY, &cohX, &cohY, &neighbours);
 
     if (neighbours > 0) {
@@ -106,28 +102,28 @@ __global__ void boidsKernel(
         cohY = (cohY / neighbours) - self.y;
     }
 
-    float ax = sepX * (4.0f * separation)
-             + aliX * (2.0f * alignment)
-             + cohX * (1.5f * cohesion);
-    float ay = sepY * (4.0f * separation)
-             + aliY * (2.0f * alignment)
-             + cohY * (1.5f * cohesion);
+    float ax = sepX * (d_config.sepWeight * d_config.separation)
+             + aliX * (d_config.aliWeight * d_config.alignment)
+             + cohX * (d_config.cohWeight * d_config.cohesion);
+    float ay = sepY * (d_config.sepWeight * d_config.separation)
+             + aliY * (d_config.aliWeight * d_config.alignment)
+             + cohY * (d_config.cohWeight * d_config.cohesion);
 
     // ── Real GPU obstacle avoidance ───────────────────────────────────────────
     gpuObstacleAvoidance(self.x, self.y, self.vx, self.vy,
                          d_obstacles, obstacleCount, ax, ay);
 
     // ── Wind ──────────────────────────────────────────────────────────────────
-    ax += windX * 0.3f;
-    ay += windY * 0.3f;
+    ax += d_config.windX * 0.3f;
+    ay += d_config.windY * 0.3f;
 
     // ── Attractor / repulsor ──────────────────────────────────────────────────
-    if (attractorActive) {
-        float dxA = attractorX - self.x;
-        float dyA = attractorY - self.y;
+    if (d_config.attractorActive) {
+        float dxA = d_config.attractorX - self.x;
+        float dyA = d_config.attractorY - self.y;
         float distA = sqrtf(dxA*dxA + dyA*dyA);
-        if (distA < attractorRadius && distA > 0.001f) {
-            float force = attractorStrength * (1.0f - distA / attractorRadius);
+        if (distA < d_config.attractorRadius && distA > 0.001f) {
+            float force = d_config.attractorStrength * (1.0f - distA / d_config.attractorRadius);
             ax += (dxA / distA) * force;
             ay += (dyA / distA) * force;
         }
@@ -138,12 +134,13 @@ __global__ void boidsKernel(
     float distM = sqrtf(dxM*dxM + dyM*dyM);
     if (distM < 0.5f && distM > 0.001f) {
         float strength = (0.5f - distM) / 0.5f;
-        ax -= dxM * strength * 1.2f;
+        ax -= dxM * strength * 1.2f; // Could be config too, but we'll leave it for now
         ay -= dyM * strength * 1.2f;
     }
 
     // ── Boundary steering ─────────────────────────────────────────────────────
-    const float margin = 0.9f, turnFactor = 0.5f;
+    const float margin = d_config.boundaryMargin;
+    const float turnFactor = d_config.boundaryTurnFactor;
     if (self.x >  margin) ax -= turnFactor;
     if (self.x < -margin) ax += turnFactor;
     if (self.y >  margin) ay -= turnFactor;
@@ -151,28 +148,28 @@ __global__ void boidsKernel(
 
     // ── Clamp force ───────────────────────────────────────────────────────────
     float forceMag = sqrtf(ax*ax + ay*ay);
-    if (forceMag > maxForce && forceMag > 0.0001f) {
-        ax = (ax / forceMag) * maxForce;
-        ay = (ay / forceMag) * maxForce;
+    if (forceMag > d_config.maxForce && forceMag > 0.0001f) {
+        ax = (ax / forceMag) * d_config.maxForce;
+        ay = (ay / forceMag) * d_config.maxForce;
     }
 
     // ── Predator / prey behaviour ─────────────────────────────────────────────
-    float currentMaxSpeed = maxSpeed;
+    float currentMaxSpeed = d_config.maxSpeed;
     if (self.type == PREDATOR) {
-        currentMaxSpeed = maxSpeed * predatorSpeedMul;
-        ax *= predatorSpeedMul;
-        ay *= predatorSpeedMul;
+        currentMaxSpeed = d_config.maxSpeed * d_config.predatorSpeedMul;
+        ax *= d_config.predatorSpeedMul;
+        ay *= d_config.predatorSpeedMul;
     }
     if (self.type == PREY) {
-        ax -= fearWeight * sepX * 3.0f;
-        ay -= fearWeight * sepY * 3.0f;
+        ax -= d_config.fearWeight * sepX * 3.0f; // 3.0f can be fearRepelWeight if added
+        ay -= d_config.fearWeight * sepY * 3.0f;
     }
 
     // ── Integrate ────────────────────────────────────────────────────────────
     if (isnan(ax) || isnan(ay)) { ax = 0.0f; ay = 0.0f; }
 
-    self.vx += ax * dt * speedFactor;
-    self.vy += ay * dt * speedFactor;
+    self.vx += ax * dt * d_config.speedFactor;
+    self.vy += ay * dt * d_config.speedFactor;
     self.vx *= 0.99f;
     self.vy *= 0.99f;
 
@@ -195,17 +192,9 @@ __global__ void boidsKernel(
 // ─── Launcher ────────────────────────────────────────────────────────────────
 void launchBoidsKernel(
     Agent* d_agents, int count, float dt, float mouseX, float mouseY,
-    int* cellStart, int* cellEnd, int* particleIndex,
+    int* cellStart, int* cellEnd, int* particleIndex, const Agent* sorted_agents_data,
     int tableSize, float cellSize,
     float4* renderPositions,
-    float separation, float alignment, float cohesion,
-    float perceptionRadius, float maxSpeed, float maxForce,
-    float predatorRatio, float predatorSpeedMul, float fearWeight,
-    float windX, float windY,
-    bool attractorActive,
-    float attractorX, float attractorY,
-    float attractorStrength, float attractorRadius,
-    float speedFactor,
     GPUObstacle* d_obstacles, int obstacleCount
 ) {
     int blockSize = 256;
@@ -213,15 +202,8 @@ void launchBoidsKernel(
 
     boidsKernel<<<gridSize, blockSize>>>(
         d_agents, count, dt, mouseX, mouseY,
-        cellStart, cellEnd, particleIndex,
+        cellStart, cellEnd, particleIndex, sorted_agents_data,
         tableSize, cellSize, renderPositions,
-        separation, alignment, cohesion,
-        perceptionRadius, maxSpeed, maxForce,
-        predatorRatio, predatorSpeedMul, fearWeight,
-        windX, windY,
-        attractorActive, attractorX, attractorY,
-        attractorStrength, attractorRadius,
-        speedFactor,
         d_obstacles, obstacleCount
     );
 }

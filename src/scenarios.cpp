@@ -1,6 +1,9 @@
 #include "scenarios.h"
 #include "presets.h"
 #include <cmath>
+#include <random>
+
+static std::mt19937 g_rng(42);
 
 const char* scenarioName(ScenarioID id) {
     static const char* names[SCENARIO_COUNT] = {
@@ -58,7 +61,7 @@ void startScenario(ScenarioID id,
             o.type   = OBS_CIRCLE;
             o.x      = pos[0];
             o.y      = pos[1];
-            o.radius = 0.08f + 0.04f * (float)(std::rand() % 4);
+            o.radius = 0.08f + 0.04f * (float)(std::uniform_int_distribution<int>(0, 3)(g_rng));
             obstacles.push_back(o);
         }
         break;
@@ -109,11 +112,12 @@ void updateScenario(ScenarioState&         state,
     case SCENARIO_OBSTACLE_CRSE:
         // Slowly move obstacles after 10 s
         if (state.elapsed > 10.0f) {
+            std::uniform_int_distribution<int> dist3(0, 2);
             for (Obstacle& o : obstacles) {
                 if (!o.isMoving) {
                     o.isMoving   = true;
-                    o.moveSpeedX = 0.04f * (std::rand() % 3 - 1);
-                    o.moveSpeedY = 0.04f * (std::rand() % 3 - 1);
+                    o.moveSpeedX = 0.04f * (float)(dist3(g_rng) - 1);
+                    o.moveSpeedY = 0.04f * (float)(dist3(g_rng) - 1);
                 }
             }
         }
@@ -129,7 +133,8 @@ void updateScenario(ScenarioState&         state,
         if (d < 0.05f) {
             // flip direction
             state.migrationTargetX = -state.migrationTargetX;
-            state.migrationTargetY = 0.3f * (float)(std::rand() % 3 - 1);
+            std::uniform_int_distribution<int> dist3(0, 2);
+            state.migrationTargetY = 0.3f * (float)(dist3(g_rng) - 1);
         } else {
             ax += (dx / d) * 0.08f * dt;
             ay += (dy / d) * 0.08f * dt;

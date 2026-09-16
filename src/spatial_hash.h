@@ -6,6 +6,7 @@ struct SpatialHash {
     int*   sorted_agents;  // agent IDs sorted by cell
     int*   cell_start;     // where each cell begins in sorted list
     int*   cell_end;       // where each cell ends
+    Agent* sorted_agents_data; // actual agent data sorted by cell
     int    table_size;     // number of buckets
     float  cell_size;      // = perception_radius
     int    agent_count;

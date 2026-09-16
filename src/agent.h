@@ -8,7 +8,6 @@ enum AgentType {
 struct Agent {
     float x, y;
     float vx, vy;
-    float ax, ay;
 
     float max_speed;
     float perception_radius;

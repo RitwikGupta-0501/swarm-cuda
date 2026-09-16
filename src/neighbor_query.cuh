@@ -10,7 +10,7 @@ __device__ inline void queryNeighbors(
     int           agent_idx,
     float         px, float py,
     float         cell_size,
-    Agent*        agents,
+    const Agent*  sorted_agents_data,
     const int*    sorted_agents,
     const int*    cell_start,
     const int*    cell_end,
@@ -36,15 +36,15 @@ __device__ inline void queryNeighbors(
                 int nid = sorted_agents[j];
                 if (nid == agent_idx) continue;
 
-                float ddx = agents[nid].x - px;
-                float ddy = agents[nid].y - py;
+                float ddx = sorted_agents_data[j].x - px;
+                float ddy = sorted_agents_data[j].y - py;
                 float dist = sqrtf(ddx*ddx + ddy*ddy) + 1e-6f;
 
                 if (dist < radius && dist > 0.0f) {
-                    *aliX += agents[nid].vx;
-                    *aliY += agents[nid].vy;
-                    *cohX += agents[nid].x;
-                    *cohY += agents[nid].y;
+                    *aliX += sorted_agents_data[j].vx;
+                    *aliY += sorted_agents_data[j].vy;
+                    *cohX += sorted_agents_data[j].x;
+                    *cohY += sorted_agents_data[j].y;
                     (*neighbors)++;
                 }
                 if (dist < radius * 0.5f && dist > 0.0f) {
