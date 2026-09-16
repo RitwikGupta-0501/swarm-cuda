@@ -3,31 +3,48 @@
 #include <glad/glad.h>
 #include "ui.h"
 
-// Initialize GPU simulation
-void initSimulation(int agentCount, const SimParams& params);
+#include <vector>
+#include "ui.h"
 
-// Run simulation step
-void stepSimulation(float dt, float mouseX, float mouseY,
-                    const SimParams& params);
+// Forward declaration of internal CUDA types if needed
+class SwarmEngine {
+public:
+    SwarmEngine() = default;
+    ~SwarmEngine() { shutdown(); }
 
-// CUDA/OpenGL interop for particle rendering buffer
-void registerRenderBuffer(GLuint vbo);
-void unregisterRenderBuffer();
+    // Initialize GPU simulation
+    void init(int agentCount, const SimParams& params);
 
-void updateGPUObstacles(const std::vector<Obstacle>& obs);
+    // Run simulation step
+    void step(float dt, float mouseX, float mouseY, const SimParams& params);
 
-// Agent stats
-void getCounts(int* predators, int* prey);
-float getAverageSpeed();
-float* getAgentPositions();
-int getAgentCount();
-void getKernelProfileTimes(float& hashTimeMs, float& kernelTimeMs);
+    // CUDA/OpenGL interop for particle rendering buffer
+    void registerRenderBuffer(GLuint vbo);
+    void unregisterRenderBuffer();
 
-// Add a single agent of given type at random position
-void addAgent(int type);   // type: PREY=0, PREDATOR=1
+    void updateGPUObstacles(const std::vector<Obstacle>& obs);
 
-// Randomly convert one prey → predator (or vice-versa)
-void convertRandomAgent();
+    // Agent stats
+    void getCounts(int* predators, int* prey);
+    float getAverageSpeed();
+    float* getAgentPositions();
+    int getAgentCount() const;
+    void getKernelProfileTimes(float& hashTimeMs, float& kernelTimeMs);
 
-// Cleanup GPU resources
-void shutdownSimulation();
+    // Add a single agent of given type at random position
+    void addAgent(int type);   // type: PREY=0, PREDATOR=1
+
+    // Randomly convert one prey → predator (or vice-versa)
+    void convertRandomAgent();
+
+    // Cleanup GPU resources
+    void shutdown();
+
+    // Check if agent count changed
+    bool isAgentCountDirty() const;
+    void clearAgentCountDirty();
+
+private:
+    struct State;
+    State* state = nullptr;
+};

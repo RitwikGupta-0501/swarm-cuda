@@ -34,13 +34,16 @@
 #include <string>
 #include <cstdio>
 #include <filesystem>
+#include <nlohmann/json.hpp>
 #include "renderer.h"
+#include "scenarios.h"
 
 // ─── Globals ──────────────────────────────────────────────────────────────────
 SimParams            params;
 RenderOptions        renderOpts;
 SimStats             stats;
 std::vector<Obstacle> obstacles;
+ScenarioState         scenarioState;
 
 bool paused              = false;
 bool stepOnce            = false;
@@ -61,32 +64,6 @@ static void exportState(const std::string& path);
 static bool loadState (const std::string& path);
 
 // ─────────────────────────────────────────────────────────────────────────────
-//   SHADERS (Removed)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ─────────────────────────────────────────────────────────────────────────────
-//   COLOUR HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-static void hsvToRgb(float h, float s, float v, float& r, float& g, float& b)
-{
-    int   i = (int)(h * 6);
-    float f = h * 6 - i;
-    float p = v*(1-s), q = v*(1-f*s), t = v*(1-(1-f)*s);
-    switch (i%6) {
-        case 0: r=v; g=t; b=p; break;
-        case 1: r=q; g=v; b=p; break;
-        case 2: r=p; g=v; b=t; break;
-        case 3: r=p; g=q; b=v; break;
-        case 4: r=t; g=p; b=v; break;
-        default:r=v; g=p; b=q; break;
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//   TRAIL SYSTEM (Removed)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ─────────────────────────────────────────────────────────────────────────────
 //   CALLBACKS
 // ─────────────────────────────────────────────────────────────────────────────
 static void cursorPosCb(GLFWwindow* w, double x, double y) {
@@ -97,6 +74,16 @@ static void cursorPosCb(GLFWwindow* w, double x, double y) {
 
 static void mouseButtonCb(GLFWwindow* w, int button, int action, int mods) {
     if (ImGui::GetIO().WantCaptureMouse) return;
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS && (mods & GLFW_MOD_CONTROL)) {
+        int width, height;
+        glfwGetWindowSize(w, &width, &height);
+        double cx, cy;
+        glfwGetCursorPos(w, &cx, &cy);
+        params.attractorX = (float)(cx / width) * 2.0f - 1.0f;
+        params.attractorY = 1.0f - (float)(cy / height) * 2.0f;
+    }
+
     auto* renderer = static_cast<swarm::Renderer*>(glfwGetWindowUserPointer(w));
     if (renderer) renderer->camera().onMouseButton(button, action, mods);
 }
@@ -173,8 +160,9 @@ int main()
     int agentCount = params.agentCount;
 
     // ── Init simulation ───────────────────────────────────────────────────────
-    initSimulation(agentCount, params);
-    registerRenderBuffer(renderer.getAgentVbo());
+    SwarmEngine engine;
+    engine.init(agentCount, params);
+    engine.registerRenderBuffer(renderer.getAgentVbo());
 
     std::vector<uint32_t> initialTypes(agentCount, 0);
     int initialNumPreds = static_cast<int>(agentCount * params.predatorRatio);
@@ -233,10 +221,16 @@ int main()
         float mouseX = (float)(mx / width)  * 2.0f - 1.0f;
         float mouseY = 1.0f - (float)(my / height) * 2.0f;
 
+        // Bind attractor to cursor if enabled
+        if (params.attractorActive && params.attractorBindToCursor) {
+            params.attractorX = mouseX;
+            params.attractorY = mouseY;
+        }
+
         // ── Reinit if requested ───────────────────────────────────────────────
         if (params.reinitRequested) {
             // 1. Tear down the simulation and unmap its CUDA resources
-            shutdownSimulation();
+            engine.shutdown();
             agentCount = params.agentCount;
 
             // 2. Resize Renderer's OpenGL buffers (and its internal CUDA interop handle)
@@ -246,10 +240,10 @@ int main()
             }
 
             // 3. Re-initialize simulation (allocates new CUDA arrays)
-            initSimulation(agentCount, params);
+            engine.init(agentCount, params);
 
             // 4. Re-register the newly sized OpenGL VBO with the simulation
-            registerRenderBuffer(renderer.getAgentVbo());
+            engine.registerRenderBuffer(renderer.getAgentVbo());
 
             // 5. Restore metadata (agent types for rendering)
             std::vector<uint32_t> types(agentCount, 0);
@@ -264,18 +258,48 @@ int main()
 
         // ── Step simulation ───────────────────────────────────────────────────
         auto simStart = std::chrono::high_resolution_clock::now();
+
+        // Fixed timestep: simulation advances 16ms per frame regardless of
+        // wall-clock time. This ensures deterministic behavior but means
+        // simulation speed varies with framerate. Use params.speedFactor
+        // to compensate.
+        constexpr float FIXED_DT = 0.016f;
+
         if (!paused || stepOnce) {
-            updateMovingObstacles(obstacles, 0.016f);
+            updateMovingObstacles(obstacles, FIXED_DT);
 
             // FIX: Upload the updated obstacle list to the GPU before the kernel launch!
-            updateGPUObstacles(obstacles);
+            engine.updateGPUObstacles(obstacles);
 
-            stepSimulation(0.016f, mouseX, mouseY, params);
-            getKernelProfileTimes(stats.spatialHashTimeMs, stats.physicsKernelTimeMs);
+            engine.step(FIXED_DT, mouseX, mouseY, params);
+            engine.getKernelProfileTimes(stats.spatialHashTimeMs, stats.physicsKernelTimeMs);
 
-            getCounts(&stats.predatorCount, &stats.preyCount);
-            stats.avgSpeed = getAverageSpeed();
+            engine.getCounts(&stats.predatorCount, &stats.preyCount);
+            stats.avgSpeed = engine.getAverageSpeed();
             stepOnce = false;
+        }
+
+        if (engine.isAgentCountDirty()) {
+            int newCount = engine.getAgentCount();
+            std::string err;
+            if (!renderer.resizeAgentBuffers(newCount, &err)) {
+                std::cerr << "Failed to resize agent buffers: " << err << "\n";
+            }
+            engine.unregisterRenderBuffer();
+            engine.registerRenderBuffer(renderer.getAgentVbo());
+
+            std::vector<uint32_t> types(newCount, 0);
+            int numPreds = static_cast<int>(newCount * params.predatorRatio);
+            for (int i = 0; i < numPreds; ++i) {
+                types[i] = 1;
+            }
+            renderer.uploadAgentTypes(types.data(), newCount);
+            engine.clearAgentCountDirty();
+        }
+
+        // Update active scenario (wind, migration target, etc.)
+        if (scenarioState.running) {
+            updateScenario(scenarioState, params, obstacles, FIXED_DT);
         }
 
         auto simEnd = std::chrono::high_resolution_clock::now();
@@ -283,7 +307,7 @@ int main()
             std::chrono::duration<float, std::milli>(simEnd - simStart).count();
 
         // ── Render simulation ──────────────────────────────────────────────────
-        int curCount = getAgentCount();
+        int curCount = engine.getAgentCount();
 
         switch (renderOpts.colorScheme) {
             case COLOR_UNIFORM:  renderer.setVizMode(swarm::VizMode::Uniform); break;
@@ -302,7 +326,9 @@ int main()
 
         renderer.setShowGrid(renderOpts.showGrid);
 
+        auto renderStart = std::chrono::high_resolution_clock::now();
         renderer.render(curCount, static_cast<float>(glfwGetTime()), swarm::FrameStats{});
+        auto renderEnd = std::chrono::high_resolution_clock::now();
 
         swarm::CameraMatrices camMats = renderer.camera().matrices(0.0f);
         stats.cameraMode = static_cast<int>(camMats.mode);
@@ -312,7 +338,7 @@ int main()
         stats.camZoom    = camMats.zoom;
 
         // ── ImGui UI ──────────────────────────────────────────────────────────
-        renderFullUI(params, renderOpts, stats, obstacles,
+        renderFullUI(engine, params, renderOpts, stats, obstacles, scenarioState,
                      paused, screenshotRequested, recordingActive);
 
         // ── Export / Load State (flags set by ui.cpp) ────────────────────────
@@ -344,10 +370,8 @@ int main()
         }
 
         // ── Render ImGui + swap ───────────────────────────────────────────────
-        auto renderStart = std::chrono::high_resolution_clock::now();
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        auto renderEnd = std::chrono::high_resolution_clock::now();
         stats.renderTimeMs =
             std::chrono::duration<float, std::milli>(renderEnd - renderStart).count();
 
@@ -360,7 +384,7 @@ int main()
     }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
-    shutdownSimulation();
+    engine.shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -397,117 +421,106 @@ static void exportState(const std::string& path)
     std::ofstream f(path);
     if (!f.is_open()) return;
 
+    nlohmann::json j;
+    
     // SimParams
-    f << "{\n";
-    f << "  \"agentCount\": "        << params.agentCount        << ",\n";
-    f << "  \"separation\": "        << params.separation        << ",\n";
-    f << "  \"alignment\": "         << params.alignment         << ",\n";
-    f << "  \"cohesion\": "          << params.cohesion          << ",\n";
-    f << "  \"perceptionRadius\": "  << params.perceptionRadius  << ",\n";
-    f << "  \"maxSpeed\": "          << params.maxSpeed          << ",\n";
-    f << "  \"maxForce\": "          << params.maxForce          << ",\n";
-    f << "  \"speedFactor\": "       << params.speedFactor       << ",\n";
-    f << "  \"predatorRatio\": "     << params.predatorRatio     << ",\n";
-    f << "  \"predatorSpeedMul\": "  << params.predatorSpeedMul  << ",\n";
-    f << "  \"fearWeight\": "        << params.fearWeight        << ",\n";
-    f << "  \"windX\": "             << params.windX             << ",\n";
-    f << "  \"windY\": "             << params.windY             << ",\n";
-    f << "  \"attractorActive\": "   << (params.attractorActive ? 1 : 0) << ",\n";
-    f << "  \"attractorX\": "        << params.attractorX        << ",\n";
-    f << "  \"attractorY\": "        << params.attractorY        << ",\n";
-    f << "  \"attractorStrength\": " << params.attractorStrength << ",\n";
-    f << "  \"attractorRadius\": "   << params.attractorRadius   << ",\n";
+    j["agentCount"]        = params.agentCount;
+    j["separation"]        = params.separation;
+    j["alignment"]         = params.alignment;
+    j["cohesion"]          = params.cohesion;
+    j["perceptionRadius"]  = params.perceptionRadius;
+    j["maxSpeed"]          = params.maxSpeed;
+    j["maxForce"]          = params.maxForce;
+    j["speedFactor"]       = params.speedFactor;
+    j["predatorRatio"]     = params.predatorRatio;
+    j["predatorSpeedMul"]  = params.predatorSpeedMul;
+    j["fearWeight"]        = params.fearWeight;
+    j["windX"]             = params.windX;
+    j["windY"]             = params.windY;
+    j["attractorActive"]   = params.attractorActive;
+    j["attractorX"]        = params.attractorX;
+    j["attractorY"]        = params.attractorY;
+    j["attractorStrength"] = params.attractorStrength;
+    j["attractorRadius"]   = params.attractorRadius;
 
     // RenderOptions
-    f << "  \"colorScheme\": "  << (int)renderOpts.colorScheme  << ",\n";
-    f << "  \"agentSize\": "    << renderOpts.agentSize          << ",\n";
-    f << "  \"trailLength\": "  << renderOpts.trailLength        << ",\n";
-    f << "  \"cameraFOV\": "    << renderOpts.cameraFOV          << ",\n";
-    f << "  \"showGrid\": "     << (renderOpts.showGrid     ? 1 : 0) << ",\n";
-    f << "  \"showVelocity\": " << (renderOpts.showVelocity ? 1 : 0) << ",\n";
+    j["colorScheme"]  = (int)renderOpts.colorScheme;
+    j["agentSize"]    = renderOpts.agentSize;
+    j["trailLength"]  = renderOpts.trailLength;
+    j["cameraFOV"]    = renderOpts.cameraFOV;
+    j["showGrid"]     = renderOpts.showGrid;
+    j["showVelocity"] = renderOpts.showVelocity;
 
     // Obstacles
-    f << "  \"obstacles\": [\n";
-    for (size_t i = 0; i < obstacles.size(); i++) {
-        const Obstacle& o = obstacles[i];
-        f << "    {\"type\":"    << (int)o.type
-          << ",\"x\":"         << o.x    << ",\"y\":"  << o.y
-          << ",\"x2\":"        << o.x2   << ",\"y2\":" << o.y2
-          << ",\"radius\":"    << o.radius
-          << ",\"moving\":"    << (o.isMoving ? 1 : 0)
-          << ",\"mvx\":"       << o.moveSpeedX
-          << ",\"mvy\":"       << o.moveSpeedY << "}";
-        if (i + 1 < obstacles.size()) f << ",";
-        f << "\n";
+    nlohmann::json obsArray = nlohmann::json::array();
+    for (const auto& o : obstacles) {
+        obsArray.push_back({
+            {"type",   (int)o.type},
+            {"x",      o.x},
+            {"y",      o.y},
+            {"x2",     o.x2},
+            {"y2",     o.y2},
+            {"radius", o.radius},
+            {"moving", o.isMoving},
+            {"mvx",    o.moveSpeedX},
+            {"mvy",    o.moveSpeedY}
+        });
     }
-    f << "  ]\n}\n";
+    j["obstacles"] = obsArray;
+
+    f << j.dump(4);
 }
 
 static bool loadState(const std::string& path)
 {
     std::ifstream f(path);
     if (!f.is_open()) return false;
+    nlohmann::json j;
+    try { f >> j; } catch (...) { return false; }
 
-    auto readFloat = [](const std::string& line, const char* key, float& out) {
-        std::string k = std::string("\"") + key + "\": ";
-        auto p = line.find(k);
-        if (p == std::string::npos) return false;
-        out = std::stof(line.substr(p + k.size())); return true;
-    };
-    auto readInt = [](const std::string& line, const char* key, int& out) {
-        std::string k = std::string("\"") + key + "\": ";
-        auto p = line.find(k);
-        if (p == std::string::npos) return false;
-        out = std::stoi(line.substr(p + k.size())); return true;
-    };
+    if (j.contains("agentCount"))        params.agentCount        = j["agentCount"];
+    if (j.contains("separation"))        params.separation        = j["separation"];
+    if (j.contains("alignment"))         params.alignment         = j["alignment"];
+    if (j.contains("cohesion"))          params.cohesion          = j["cohesion"];
+    if (j.contains("perceptionRadius"))  params.perceptionRadius  = j["perceptionRadius"];
+    if (j.contains("maxSpeed"))          params.maxSpeed          = j["maxSpeed"];
+    if (j.contains("maxForce"))          params.maxForce          = j["maxForce"];
+    if (j.contains("speedFactor"))       params.speedFactor       = j["speedFactor"];
+    if (j.contains("predatorRatio"))     params.predatorRatio     = j["predatorRatio"];
+    if (j.contains("predatorSpeedMul"))  params.predatorSpeedMul  = j["predatorSpeedMul"];
+    if (j.contains("fearWeight"))        params.fearWeight        = j["fearWeight"];
+    if (j.contains("windX"))             params.windX             = j["windX"];
+    if (j.contains("windY"))             params.windY             = j["windY"];
+    if (j.contains("attractorActive"))   params.attractorActive   = j["attractorActive"];
+    if (j.contains("attractorX"))        params.attractorX        = j["attractorX"];
+    if (j.contains("attractorY"))        params.attractorY        = j["attractorY"];
+    if (j.contains("attractorStrength")) params.attractorStrength = j["attractorStrength"];
+    if (j.contains("attractorRadius"))   params.attractorRadius   = j["attractorRadius"];
 
-    obstacles.clear();
-    bool inObs = false;
-    std::string line;
-    while (std::getline(f, line)) {
-        if (line.find("\"obstacles\"") != std::string::npos) { inObs = true; continue; }
+    if (j.contains("colorScheme"))  renderOpts.colorScheme = (ColorScheme)j["colorScheme"].get<int>();
+    if (j.contains("agentSize"))    renderOpts.agentSize = j["agentSize"];
+    if (j.contains("trailLength"))  renderOpts.trailLength = j["trailLength"];
+    if (j.contains("cameraFOV"))    renderOpts.cameraFOV = j["cameraFOV"];
+    if (j.contains("showGrid"))     renderOpts.showGrid = j["showGrid"];
+    if (j.contains("showVelocity")) renderOpts.showVelocity = j["showVelocity"];
 
-        if (!inObs) {
-            int iv = 0; float fv = 0;
-            readInt  (line, "agentCount",       params.agentCount);
-            readFloat(line, "separation",        params.separation);
-            readFloat(line, "alignment",         params.alignment);
-            readFloat(line, "cohesion",          params.cohesion);
-            readFloat(line, "perceptionRadius",  params.perceptionRadius);
-            readFloat(line, "maxSpeed",          params.maxSpeed);
-            readFloat(line, "maxForce",          params.maxForce);
-            readFloat(line, "speedFactor",       params.speedFactor);
-            readFloat(line, "predatorRatio",     params.predatorRatio);
-            readFloat(line, "predatorSpeedMul",  params.predatorSpeedMul);
-            readFloat(line, "fearWeight",        params.fearWeight);
-            readFloat(line, "windX",             params.windX);
-            readFloat(line, "windY",             params.windY);
-            if (readInt(line, "attractorActive", iv)) params.attractorActive = iv != 0;
-            readFloat(line, "attractorX",        params.attractorX);
-            readFloat(line, "attractorY",        params.attractorY);
-            readFloat(line, "attractorStrength", params.attractorStrength);
-            readFloat(line, "attractorRadius",   params.attractorRadius);
-            if (readInt(line, "colorScheme", iv))  renderOpts.colorScheme = (ColorScheme)iv;
-            readFloat(line, "agentSize",         renderOpts.agentSize);
-            readFloat(line, "trailLength",       renderOpts.trailLength);
-            readFloat(line, "cameraFOV",         renderOpts.cameraFOV);
-            if (readInt(line, "showGrid",     iv)) renderOpts.showGrid    = iv != 0;
-            if (readInt(line, "showVelocity", iv)) renderOpts.showVelocity= iv != 0;
-        } else {
-            // parse obstacle JSON objects on single lines
-            if (line.find('{') == std::string::npos) continue;
-            Obstacle o{};
-            int typeI=0, movI=0;
-            sscanf(line.c_str(),
-                "    {\"type\":%d,\"x\":%f,\"y\":%f,\"x2\":%f,\"y2\":%f,"
-                "\"radius\":%f,\"moving\":%d,\"mvx\":%f,\"mvy\":%f}",
-                &typeI, &o.x, &o.y, &o.x2, &o.y2,
-                &o.radius, &movI, &o.moveSpeedX, &o.moveSpeedY);
-            o.type = (ObstacleType)typeI;
-            o.isMoving = movI != 0;
-            obstacles.push_back(o);
+    if (j.contains("obstacles") && j["obstacles"].is_array()) {
+        obstacles.clear();
+        for (const auto& o : j["obstacles"]) {
+            Obstacle obs{};
+            if (o.contains("type"))   obs.type = (ObstacleType)o["type"].get<int>();
+            if (o.contains("x"))      obs.x = o["x"];
+            if (o.contains("y"))      obs.y = o["y"];
+            if (o.contains("x2"))     obs.x2 = o["x2"];
+            if (o.contains("y2"))     obs.y2 = o["y2"];
+            if (o.contains("radius")) obs.radius = o["radius"];
+            if (o.contains("moving")) obs.isMoving = o["moving"];
+            if (o.contains("mvx"))    obs.moveSpeedX = o["mvx"];
+            if (o.contains("mvy"))    obs.moveSpeedY = o["mvy"];
+            obstacles.push_back(obs);
         }
     }
+
     params.reinitRequested = true;
     return true;
 }

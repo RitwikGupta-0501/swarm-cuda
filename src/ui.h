@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 
+struct ScenarioState;
+
 // ─── Rendering Options (passed to Person 1) ──────────────────────────────────
 enum ColorScheme {
     COLOR_UNIFORM = 0,
@@ -46,7 +48,6 @@ struct SimParams {
     float attractorStrength = 1.0f;   // positive = attract, negative = repel
     float attractorRadius   = 0.3f;
     bool attractorBindToCursor = false;
-    bool attractorTeleportRequested = false;
 
     int   agentCount        = 10000;
     bool  reinitRequested   = false;  // set when count changes
@@ -86,11 +87,15 @@ struct SimStats {
 void renderUI(bool& paused, float& speed,
               float& separation, float& alignment, float& cohesion);
 
+class SwarmEngine;
+
 // Full-featured version used when all sub-systems are integrated
-void renderFullUI(SimParams&          params,
+void renderFullUI(SwarmEngine&        engine,
+                  SimParams&          params,
                   RenderOptions&      renderOpts,
                   SimStats&           stats,
                   std::vector<Obstacle>& obstacles,
+                  ScenarioState&      scenarioState,
                   bool&               paused,
                   bool&               screenshotRequested,
                   bool&               recordingActive);

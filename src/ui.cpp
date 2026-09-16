@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "presets.h"
 #include "simulation.h"   // addAgent, convertRandomAgent
+#include "scenarios.h"
 #include <cstdio>
 #include <cmath>
 #include <vector>
@@ -48,11 +49,12 @@ static void HelpMarker(const char* desc) {
     }
 }
 
-// ─── Full-featured UI ─────────────────────────────────────────────────────────
-void renderFullUI(SimParams&              params,
+void renderFullUI(SwarmEngine&            engine,
+                  SimParams&              params,
                   RenderOptions&          renderOpts,
                   SimStats&               stats,
                   std::vector<Obstacle>&  obstacles,
+                  ScenarioState&          scenarioState,
                   bool&                   paused,
                   bool&                   screenshotRequested,
                   bool&                   recordingActive)
@@ -199,15 +201,15 @@ void renderFullUI(SimParams&              params,
         ImGui::Separator();
 
         if (ImGui::Button("Add Predator")) {
-            addAgent(PREDATOR);   // ← real call to simulation.cu
+            engine.addAgent(1); // PREDATOR
         }
         ImGui::SameLine();
         if (ImGui::Button("Add Prey")) {
-            addAgent(PREY);       // ← real call to simulation.cu
+            engine.addAgent(0); // PREY
         }
         ImGui::SameLine();
         if (ImGui::Button("Convert Random")) {
-            convertRandomAgent(); // ← real call to simulation.cu
+            engine.convertRandomAgent(); 
         }
         ImGui::SameLine(); HelpMarker("Add a single agent or flip a random agent's type.");
     }
@@ -254,6 +256,27 @@ void renderFullUI(SimParams&              params,
                 ImGui::TreePop();
             }
             ImGui::PopID();
+        }
+    }
+
+    // ── Scenarios ─────────────────────────────────────────────────────────────
+    if (ImGui::CollapsingHeader("Scenarios")) {
+        static int selectedScenario = 0;
+        const char* names[SCENARIO_COUNT];
+        for (int i = 0; i < SCENARIO_COUNT; i++)
+            names[i] = scenarioName((ScenarioID)i);
+
+        ImGui::Combo("##scenario", &selectedScenario, names, SCENARIO_COUNT);
+        ImGui::SameLine();
+
+        if (!scenarioState.running) {
+            if (ImGui::Button("Start"))
+                startScenario((ScenarioID)selectedScenario, params, obstacles, scenarioState);
+        } else {
+            if (ImGui::Button("Stop"))
+                stopScenario(scenarioState, obstacles);
+            ImGui::SameLine();
+            ImGui::Text("%.1fs", scenarioState.elapsed);
         }
     }
 

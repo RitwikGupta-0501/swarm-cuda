@@ -10,36 +10,43 @@ struct GPUObstacle {
     float radius;
 };
 
+struct SimConfig {
+    float separation;
+    float alignment;
+    float cohesion;
+    float perceptionRadius;
+    float maxSpeed;
+    float maxForce;
+    float predatorRatio;
+    float predatorSpeedMul;
+    float fearWeight;
+    float windX;
+    float windY;
+    bool  attractorActive;
+    float attractorX;
+    float attractorY;
+    float attractorStrength;
+    float attractorRadius;
+    float speedFactor;
+    
+    // Magic numbers replaced
+    float lookAhead;
+    float safetyDist;
+    float avoidWeight;
+    float sepWeight;
+    float aliWeight;
+    float cohWeight;
+    float boundaryTurnFactor;
+    float boundaryMargin;
+};
+
+void uploadSimConfig(const SimConfig& config);
+
 void launchBoidsKernel(
     Agent* d_agents, int count, float dt, float mouseX, float mouseY,
-    int* cellStart, int* cellEnd, int* particleIndex,
+    int* cellStart, int* cellEnd, int* particleIndex, const Agent* sorted_agents_data,
     int tableSize, float cellSize,
     float4* renderPositions,
-
-    float separation,
-    float alignment,
-    float cohesion,
-
-    float perceptionRadius,
-    float maxSpeed,
-    float maxForce,
-
-    float predatorRatio,
-    float predatorSpeedMul,
-    float fearWeight,
-
-    float windX,
-    float windY,
-
-    bool  attractorActive,
-    float attractorX,
-    float attractorY,
-    float attractorStrength,
-    float attractorRadius,
-
-    float speedFactor,
-
-    // obstacle data (may be nullptr when count==0)
     GPUObstacle* d_obstacles,
-    int          obstacleCount
+    int obstacleCount
 );

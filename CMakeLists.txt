@@ -26,6 +26,9 @@ include_directories(external/glm)
 add_library(glad external/glad/src/glad.c)
 target_include_directories(glad PUBLIC external/glad/include)
 
+# nlohmann/json
+include_directories(external/nlohmann)
+
 # ImGui
 set(IMGUI_DIR external/imgui)
 add_library(imgui
@@ -77,3 +80,6 @@ target_include_directories(swarm-sim PRIVATE
     external/imgui/backends
     external/glm
 )
+
+# Enable CUDA interop in renderer and interop_cuda_gl
+target_compile_definitions(swarm-sim PRIVATE SWARM_ENABLE_CUDA=1)
